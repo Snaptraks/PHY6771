@@ -42,11 +42,11 @@ c     Garder en memoire la structure grise
          Tgris(id)=T(id)
          Pgris(id)=P(id)
       enddo
-      write(*,*) 'structure grise done'
+C       write(*,*) 'structure grise done'
 c
 c     Calcul ETR pour modele gris
       call spectre(ND,xlogg)
-      write(*,*) 'ETR gris done'
+C       write(*,*) 'ETR gris done'
 c
 c     Iteration pour correction de structure temp
       kble=0
@@ -164,7 +164,6 @@ c
 c
 ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 c
-c
       subroutine opac(P,T)
       implicit real*8 (a-h,o-z)
       real rT       ! pression gazeuse,temperature,racineT
@@ -201,7 +200,6 @@ c
 c
 ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 c
-c
       subroutine ross(P,T,opacR)
       implicit real*8 (a-h,o-z)
       data ek,h,xme/1.38065d-16,6.6260755d-27,9.1093897d-28/
@@ -229,7 +227,6 @@ c
       end
 c
 ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-c
 c
       subroutine modelegris(tau1,tauND,Teff,xlogg,ND)
       implicit real*8 (a-h,o-z)
@@ -265,7 +262,7 @@ c     Calcul structure Press
          if (j.eq.30) stop 'non convergence P(1)'
       enddo
  202  continue
-      write(*,*) 'P(1) done'
+C       write(*,*) 'P(1) done'
 c
       tol=10**(-6.)
       do i=2,ND
@@ -281,13 +278,14 @@ c
          enddo
  203     continue
       enddo
-      write(*,*) 'structure P done'
+C       write(*,*) 'structure P done'
 c
       return
 c
       end
 c
 ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+c
       subroutine matinv(a,n,nr)
       implicit real*8 (a-h,o-z)
       dimension a(nr,nr)
@@ -366,6 +364,7 @@ c     ******************************************************************
       end
 c
 ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+c
       subroutine feautrier(ND)
       implicit real*8 (a-h,o-z)
       parameter (M=3)
@@ -461,6 +460,7 @@ c
       end
 c
 ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+c
       subroutine spectre(ND,xlogg)
       implicit real*8 (a-h,o-z)
       data ek,h,xme/1.38065d-16,6.6260755d-27,9.1093897d-28/ !
@@ -525,6 +525,7 @@ c
       end
 c
 ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+c
       subroutine correcT(xlogg,Htot,ND,sb)
       implicit real*8 (a-h,o-z)
       dimension xkapJ(100),xkapP(100),chiF(100)    !
@@ -594,6 +595,7 @@ c
       end
 c
 ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+c
       subroutine recalculstruct(ND,xlogg)
       implicit real*8 (a-h,o-z)
       data ek,h,xme/1.38065d-16,6.6260755d-27,9.1093897d-28/  !
@@ -639,3 +641,13 @@ c
       end
 c
 ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+c
+      function fctpart(Z, N, T)
+C       Calcule la fonction de partition pour un atome de numéro atomique Z
+C       de nombre d'électron N et à une température T.
+      implicit real*8 (a-h,o-z)
+      
+      
+      
+      return
+      end
