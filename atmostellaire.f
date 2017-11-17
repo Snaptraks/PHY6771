@@ -25,6 +25,7 @@ c
       enddo
  88   continue
       close(21)
+      
 c 
 c     Parametres modele
       Teff=10000.
@@ -646,8 +647,21 @@ c
 C       Calcule la fonction de partition pour un atome de numéro atomique Z
 C       de nombre d'électron N et à une température T.
       implicit real*8 (a-h,o-z)
+      integer Z, N
       
+      fctpart = 1.
       
+      return
+      end
+c
+ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+c
+      function ionlevel(Z, n)
+C       Retourne les énerdies d'ionisations de l'atome de numéro atomique Z
+C       pour le niveau d'ionisation n.
+      integer Z, n
+      
+      ionlevel = 10. ! eV
       
       return
       end
