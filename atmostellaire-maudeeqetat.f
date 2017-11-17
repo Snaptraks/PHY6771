@@ -5,9 +5,11 @@ c
       implicit real*8 (a-h,o-z)
       real*4 time,dummy(2)
       dimension Tgris(100),Pgris(100) !
+      dimension Az(6)
       data ek,h,xme/1.38065d-16,6.6260755d-27,9.1093897d-28/ !constante boltz,planck,vitesselum,masseelec
       data pi,xmH,c0/3.141592654,1.67262310d-24,2.99792458d10/ !pi,mass H,c
       dimension deltaTsT(50,100),deltaHsH(50,100),condeq(50,100) !
+      common/abond/ Az ! abondances de O,Ne,Na,Mg,Al,Si
       common/ptsfreq/ freq(500),poidsint(500),xlam(500),nfreq  ! nu,w int,lambda
       common/couches/ tau(100),T(100),P(100),xKross(100),rho(100) !structure
       common/coeffscouchefreq/ xkappa(500,100),chi(500,100),sigma(100) !
@@ -33,6 +35,13 @@ c     Parametres modele
       tau1=1.e-8
       tauND=1.e2
       ND=50
+      Az(1)=10.**-0.00 ! O
+      Az(2)=10.**-0.00 ! Ne
+      Az(3)=10.**-2.00 ! Na
+      Az(4)=10.**-2.00 ! Mg
+      Az(5)=10.**-2.50 ! Al
+      Az(6)=10.**-3.00 ! Si
+      
       sb=2.*(pi**5.)*(ek**4.)/(15.*(h**3.)*(c0**2.))
       Htot=sb*(Teff**4.)/(4.*pi)
 c
@@ -43,7 +52,8 @@ c     Garder en memoire la structure grise
          Tgris(id)=T(id)
          Pgris(id)=P(id)
       enddo
-C       write(*,*) 'structure grise done'
+      write(*,*) 'structure grise done'
+      stop
 c
 c     Calcul ETR pour modele gris
       call spectre(ND,xlogg)
@@ -103,9 +113,9 @@ c
 c   
 cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 c
-      subroutine eqetat(P,T,Az)
+      subroutine eqetat(P,T)
       implicit real*8 (a-h,o-z)
-      dimension Az(6),xNelec(6,3) !
+      dimension AZ(6),xNelec(6,3) !
       dimension phi1(6),phi2(6) !
       dimension chiz(6,2),U(6,3)  ! (divisé par k en electron volt)
       dimension TP(6),BT(6) ! top et bottom
@@ -115,8 +125,10 @@ c
       data xmass/1.0,1.0,1.0,1.0,1.0,1.0/ !masses O,Ne,Na,Mg,Al,Si
       data tol/1.d-7/
       data Z/8,10,11,12,13,14/ !O,Ne,Na,Mg,Al,Si
+      common/abond/ Az ! abondances de O,Ne,Na,Mg,Al,Si
       common/pops/ xNe,xNz(6,3),rhod   ! xNive(6,3,?) tableau niv energie.. ?? combien de niveaux
       common/partition/ Uzn  !fonctions chaque espece
+      
 c
 c     Ecrire xNelec, nombre d'electron pour chaque espece
       do i = 1,6
@@ -128,7 +140,8 @@ c
 c     Appeler subroutine fct partition
       do i = 1,6
          do k=1,3
-            U(i,j) = fctpart(Z(i),xNelec(i,k),T)
+            U(i,k) = fctpart(Z(i),xNelec(i,k),T)
+            chiz(i,k) = 10. ! valeur temporaire
          enddo
       enddo
 c     
@@ -137,14 +150,17 @@ c     Calcul xNtot
 c
 c     Calcul de phi1 et phi2
       A = (2.*pi*xme*ek*T/(h**2.))**(3./2.)
+C       print*, A
       do i=1,6
          phi1(i) = ((2.*A*U(i,2)/U(i,1))*exp(-chiz(i,1)/T))**(-1.)
          phi2(i) = (2.*A*U(i,3)/U(i,2))*exp(-chiz(i,2)/T)
       enddo
+C       print*, phi2
 c
 c     Calcul de Ne par Newton-Rawphson (boucle iterative)
       !on pose une valeur initiale de Ne0 comme si O pur
       xNe = ((1.+phi1(1)*xNtot)**(1./2.)-1.)/phi1(1)
+C       print*, xNe
 c
       do j = 1,100
          sum1 = 0.
@@ -152,15 +168,17 @@ c
          do i = 1,6
             TP(i) = xNe+2.*phi2(i)
             BT(i) = phi2(i)+xNe+(xNe**2.)*phi1(i)
-            sum1 = sum1+Az(i)*TP(1)/BT(i)
+            sum1 = sum1+Az(i)*TP(i)/BT(i)
             sum2 = sum2+Az(i)*(BT(i)-TP(i)*(1+2.*xNe*phi1(i)))
      .           /(BT(i)**2.)
          enddo
          F = xNe-(xNtot-xNe)*sum1
          dFdNe = 1.+sum1-(xNtot-xNe)*sum2
+         
          xNe = xNe-F/dFdNe       ! on corrige Ne
+         
          if (abs(F/(dFdNe*xNe)).lt.tol) goto 201 ! si F<tolerance,sort boucle
-         if (j.eq.100) stop 'non convergence eqetat'
+         if (j.eq.10) stop 'non convergence eqetat'
       enddo
 c
 c     Calcul des autres populations
@@ -290,7 +308,7 @@ c     Calcul structure Press
          if (j.eq.30) stop 'non convergence P(1)'
       enddo
  202  continue
-C       write(*,*) 'P(1) done'
+      write(*,*) 'P(1) done'
 c
       tol=10**(-6.)
       do i=2,ND
