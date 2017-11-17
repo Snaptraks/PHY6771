@@ -25,6 +25,7 @@ c
       enddo
  88   continue
       close(21)
+      
 c 
 c     Parametres modele
       Teff=10000.
@@ -108,9 +109,10 @@ c
       dimension phi1(6),phi2(6) !
       dimension chiz(6,2),U(6,3)  ! (divisé par k en electron volt)
       dimension TP(6),BT(6) ! top et bottom
+      dimension xmass(6),Z(6)
       data ek,h,xme/1.38065d-16,6.6260755d-27,9.1093897d-28/
       data pi/3.141592654/
-      data xmass// !masses O,Ne,Na,Mg,Al,Si
+      data xmass/1.0,1.0,1.0,1.0,1.0,1.0/ !masses O,Ne,Na,Mg,Al,Si
       data tol/1.d-7/
       data Z/8,10,11,12,13,14/ !O,Ne,Na,Mg,Al,Si
       common/pops/ xNe,xNz(6,3),rhod   ! xNive(6,3,?) tableau niv energie.. ?? combien de niveaux
@@ -118,7 +120,7 @@ c
 c
 c     Ecrire xNelec, nombre d'electron pour chaque espece
       do i = 1,6
-         do k = 1,3
+         do k = 0,2 ! Atome neutre a tous ses electrons
             xNelec(i,k)=Z(i)-k
          enddo
       enddo
@@ -126,8 +128,7 @@ c
 c     Appeler subroutine fct partition
       do i = 1,6
          do k=1,3
-            call fctpart(Z(i),xNelex(i,k),T)
-            U(i,j) = Uzn
+            U(i,j) = fctpart(Z(i),xNelec(i,k),T)
          enddo
       enddo
 c     
@@ -137,12 +138,13 @@ c
 c     Calcul de phi1 et phi2
       A = (2.*pi*xme*ek*T/(h**2.))**(3./2.)
       do i=1,6
-         phi1 = ((2.*A*U(i,2)/U(i,1))*exp(-chiz(i,1)/T))**(-1.)
-         phi2 = (2.*A*U(i,3)/U(i,2))*exp(-chiz(i,2)/T)
+         phi1(i) = ((2.*A*U(i,2)/U(i,1))*exp(-chiz(i,1)/T))**(-1.)
+         phi2(i) = (2.*A*U(i,3)/U(i,2))*exp(-chiz(i,2)/T)
       enddo
 c
 c     Calcul de Ne par Newton-Rawphson (boucle iterative)
-      xNe = ? !on pose une valeur initiale de Ne0
+      !on pose une valeur initiale de Ne0 comme si O pur
+      xNe = ((1.+phi1(1)*xNtot)**(1./2.)-1.)/phi1(1)
 c
       do j = 1,100
          sum1 = 0.
@@ -154,7 +156,7 @@ c
             sum2 = sum2+Az(i)*(BT(i)-TP(i)*(1+2.*xNe*phi1(i)))
      .           /(BT(i)**2.)
          enddo
-         F = xNe-(xNtot-xNe)*sum
+         F = xNe-(xNtot-xNe)*sum1
          dFdNe = 1.+sum1-(xNtot-xNe)*sum2
          xNe = xNe-F/dFdNe       ! on corrige Ne
          if (abs(F/(dFdNe*xNe)).lt.tol) goto 201 ! si F<tolerance,sort boucle
@@ -168,7 +170,7 @@ c
       do i = 1,6
          xNz(i,2) = (Ntot-Ne)*Az(i)*Ne/(phi2(i)+xNe+(xNe**2.)*phi1(i))
          xNz(i,1) = xNe*xNz(i,2)*phi1(i)
-         xNz(i,3) = xN(i,2)*phi2(i)/xNe
+         xNz(i,3) = xNz(i,2)*phi2(i)/xNe
       enddo
 c
 c     Calcul des populations des niv energie HI
@@ -672,8 +674,24 @@ c
 C       Calcule la fonction de partition pour un atome de numéro atomique Z
 C       de nombre d'électron N et à une température T.
       implicit real*8 (a-h,o-z)
+      integer Z, N
       
-      
+      fctpart = 1.
       
       return
       end
+c
+ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+c
+      function ionlevel(Z, n)
+C       Retourne les énerdies d'ionisations de l'atome de numéro atomique Z
+C       pour le niveau d'ionisation n.
+      integer Z, n
+      
+      ionlevel = 10. ! eV
+      
+      return
+      end
+c
+ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+c
