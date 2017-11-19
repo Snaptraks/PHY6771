@@ -18,3 +18,12 @@ ou
 ```
 ifort -o <nomfichier>.x <nomfichier>.f -W0 -O1 -warn none -save -lsm -lX11 -lm && <nomfichier>.x
 ```
+
+Une autre manière est de compiler puis exécuter:
+```
+ifort <nomdufichier>.f
+```
+Puis
+```
+./a.out
+```
