@@ -1,0 +1,25 @@
+Chaque fichier contient la table TOPBASE pour un seul ion.
+
+Le nombre après Z est le numéro atomique et le nombre après
+E est le nombre d'électrons.
+
+Par exemple, l'ion MgII est dans Z12E11
+
+La colonne TE(RYD) est la différence d'énergie entre le niveau et le fondamental.
+La colonne gi est le poid statistique.
+Les colonnes NZ et NE sont respectivement le numéro atomique et le nombre d'électrons.
+
+
+#####################
+
+Pour générer un tel fichier, aller à l'adresse:
+    http://cdsweb.u-strasbg.fr/topbase/energy.html
+
+Choisir NZ et NE
+
+Dessous "Do you want levels ordered in:", sélectionner "General energy order?"
+
+Dessous "OUTPUT OPTIONS", cocher les options suivantes:
+    Energy (Ryd) wrt ground state
+    Statistical weight 
+Ne pas toucher aux autres options
