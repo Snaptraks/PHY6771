@@ -18,7 +18,7 @@ c
       common/correction/ deltaT(100),deltaH(100),deltaB(100)
       common/fluxmoyencouche/xJC(100),xBC(100),xHC(100) !
       
-      common/pops/ xNe,xNtot,xNz(6,3),rhod   ! xNive(6,3,?) tableau niv energie.. ?? combien de niveaux
+      common/pops/ xNe,xNtot,xNz(6,3),rhod,xNive(6,3,30) ! j'ai mis 30 niv en attendant d'avoir le nbr
 c
       open(21,file='atmo_6771_cooldau',status='old')
 c
@@ -137,6 +137,7 @@ c
       dimension chiz(6,2),U(6,3)  ! (divisé par k en electron volt)
       dimension TP(6),BT(6) ! top et bottom
       dimension xmass(6),Z(6)
+      dimension g(6,3,30),eps(6,3,30) !poids stat niv energie,energie des niv /k en eV
       data ek,h,xme/1.38065d-16,6.6260755d-27,9.1093897d-28/
       data pi/3.141592654/
       ! masses des atomes, selon Google "mass <element> atom in grams"
@@ -149,7 +150,7 @@ c
       data tol/1.d-7/
       data Z/8,10,11,12,13,14/ !O,Ne,Na,Mg,Al,Si
       common/abond/ Az ! abondances de O,Ne,Na,Mg,Al,Si
-      common/pops/ xNe,xNtot,xNz(6,3),rhod   ! xNive(6,3,?) tableau niv energie.. ?? combien de niveaux
+      common/pops/ xNe,xNtot,xNz(6,3),rhod,xNive(6,3,30) ! j'ai mis 30 niv en attendant d'avoir le nbr
       
 c
 c     Ecrire xNelec, nombre d'electron pour chaque espece
@@ -214,7 +215,14 @@ c
 c
 c     Calcul des populations des niv energie HI
 c
-c     ??? combien de niveaux on met par espece
+c      do i=1,6
+c         do k=1,3
+c            do n=1,30      !peut changer le nbr ici
+c               xNive(i,k,n) = (xNz(i,k)*g(i,k,n)/U(i,k))     !les ener /k en eV ou pas ?
+c               .*exp(-(eps(i,k,n)-eps(i,k,1))/T)
+c            enddo
+c         enddo
+c      enddo
 c
 c     Calcul de la densite de masse
 c      
