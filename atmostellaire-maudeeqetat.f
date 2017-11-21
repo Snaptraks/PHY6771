@@ -17,6 +17,8 @@ c
       common/planckdT/ dtau(500,100),plnk(500,100) !delta tau,planck (a chaque couche)
       common/correction/ deltaT(100),deltaH(100),deltaB(100)
       common/fluxmoyencouche/xJC(100),xBC(100),xHC(100) !
+      
+      common/pops/ xNe,xNtot,xNz(6,3),rhod   ! xNive(6,3,?) tableau niv energie.. ?? combien de niveaux
 c
       open(21,file='atmo_6771_cooldau',status='old')
 c
@@ -47,6 +49,16 @@ c     Parametres modele
       
       ! Lire les fichiers topbase
       call initiateEnergyLevels()
+      
+      open(10, file='out_test_6.txt')
+      
+      do i = 70,1200
+         call eqetat(1d4, i*50d0)
+         write(10, '(4e13.4)') i*50d0, xNz(6,:)/xNtot
+      enddo
+      close(10)
+      
+      stop 'I CANCELLED IT'
 c
 c     Calcul de la structure grise
       call modelegris(tau1,tauND,Teff,xlogg,ND)
@@ -112,7 +124,7 @@ c
       call etime(time,dummy)
       write(*,*) 'temps de calcul:',time
 c
-      end   !end program modeleHpure
+      end   !end program atmostellaire
 c   
 cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 c
@@ -127,7 +139,7 @@ c
       dimension xmass(6),Z(6)
       data ek,h,xme/1.38065d-16,6.6260755d-27,9.1093897d-28/
       data pi/3.141592654/
-      ! masses des atomes, selon Google "mass <element> atom in grans"
+      ! masses des atomes, selon Google "mass <element> atom in grams"
       data xmass/2.6566962d-23, ! O
      .           3.3509177d-23, ! Ne
      .           3.8175407d-23, ! Na
@@ -137,8 +149,7 @@ c
       data tol/1.d-7/
       data Z/8,10,11,12,13,14/ !O,Ne,Na,Mg,Al,Si
       common/abond/ Az ! abondances de O,Ne,Na,Mg,Al,Si
-      common/pops/ xNe,xNz(6,3),rhod   ! xNive(6,3,?) tableau niv energie.. ?? combien de niveaux
-      common/partition/ Uzn  !fonctions chaque espece
+      common/pops/ xNe,xNtot,xNz(6,3),rhod   ! xNive(6,3,?) tableau niv energie.. ?? combien de niveaux
       
 c
 c     Ecrire xNelec, nombre d'electron pour chaque espece
@@ -153,6 +164,7 @@ c     Appeler subroutine fct partition
          do k=1,3
             U(i,k) = fctpart(Z(i),xNelec(i,k),T)
             chiz(i,k) = ionlevel(Z(i), xNelec(i, k))
+C             print*, Z(i), xNelec(i, k), U(i, k), chiz(i, k)
          enddo
       enddo
 c     
@@ -212,10 +224,6 @@ c
             rhod = rhod+xNz(i,k)*xmass(i)
          enddo
       enddo
-      
-      print*, xNe
-      print*, xNz
-      print*, rhod
 c      
       return
 c
@@ -702,15 +710,33 @@ c
 c
 ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 c
-      function ionlevel(Z, n)
+      function ionlevel(Z, n) result(chi)
 C       Retourne les energies d'ionisations de l'atome de numero atomique Z
 C       avec n electrons (ionise Z-n fois).
-      integer Z, n
+      integer, intent(in) :: Z, n
+      real*8 chi, keV
+      integer i
+      real*8, dimension(6,3) :: energyLevel
+      integer, dimension(6)  :: ielem
       
-      ionlevel = 10.-(Z-n) ! eV
+      ! CRC Handbook of Chemestry and Physics (eV)
+      data energyLevel(1,:)/13.61805, 35.1211,  54.9355 / ! O
+      data energyLevel(2,:)/21.56454, 40.96296, 63.45   / ! Ne
+      data energyLevel(3,:)/5.139076, 47.2864,  71.6200 / ! Na
+      data energyLevel(4,:)/7.646235, 15.03527, 80.1437 / ! Mg
+      data energyLevel(5,:)/5.985768, 18.82855, 28.44765/ ! Al
+      data energyLevel(6,:)/8.15168,  16.34584, 33.49302/ ! Si
       
-      return
-      end
+      data ielem/8, 10, 11, 12, 13, 14/
+      data keV  / 8.6173303D-5 /!eV/k  | Constante de Boltzman
+      
+      do i=1,6
+         if (ielem(i) == Z) exit
+      enddo
+      
+      chi = energyLevel(i, Z-n+1)/keV
+      
+      end function ionlevel
 c
 ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 c
