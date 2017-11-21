@@ -18,7 +18,7 @@ c
       common/correction/ deltaT(100),deltaH(100),deltaB(100)
       common/fluxmoyencouche/xJC(100),xBC(100),xHC(100) !
       
-      common/pops/ xNe,xNtot,xNz(6,3),rhod,xNive(6,3,30) ! j'ai mis 30 niv en attendant d'avoir le nbr
+      common/pops/ xNe,xNtot,xNz(6,3),xNive(6,3,500),rhod   ! xNive(6,3,?) tableau niv energie.. ?? combien de niveaux
 c
       open(21,file='atmo_6771_cooldau',status='old')
 c
@@ -50,13 +50,14 @@ c     Parametres modele
       ! Lire les fichiers topbase
       call initiateEnergyLevels()
       
-      open(10, file='out_test_6.txt')
+C       open(10, file='out_test_6.txt')
       
-      do i = 70,1200
-         call eqetat(1d4, i*50d0)
-         write(10, '(4e13.4)') i*50d0, xNz(6,:)/xNtot
-      enddo
-      close(10)
+C       do i = 70,1200
+C          call eqetat(1d4, i*50d0)
+C          write(10, '(5e13.4)') i*50d0, xNz(6,:)/xNtot
+C       enddo
+C       close(10)
+      call eqetat(1d4, 1d4)
       
       stop 'I CANCELLED IT'
 c
@@ -137,7 +138,6 @@ c
       dimension chiz(6,2),U(6,3)  ! (divisé par k en electron volt)
       dimension TP(6),BT(6) ! top et bottom
       dimension xmass(6),Z(6)
-      dimension g(6,3,30),eps(6,3,30) !poids stat niv energie,energie des niv /k en eV
       data ek,h,xme/1.38065d-16,6.6260755d-27,9.1093897d-28/
       data pi/3.141592654/
       ! masses des atomes, selon Google "mass <element> atom in grams"
@@ -150,7 +150,22 @@ c
       data tol/1.d-7/
       data Z/8,10,11,12,13,14/ !O,Ne,Na,Mg,Al,Si
       common/abond/ Az ! abondances de O,Ne,Na,Mg,Al,Si
-      common/pops/ xNe,xNtot,xNz(6,3),rhod,xNive(6,3,30) ! j'ai mis 30 niv en attendant d'avoir le nbr
+      common/pops/ xNe,xNtot,xNz(6,3),xNive(6,3,500),rhod   ! xNive(6,3,?) tableau niv energie.. ?? combien de niveaux
+      
+      integer,dimension(20,2)  :: ionList
+      integer,dimension(20)    :: nbLevels
+      real*8,dimension(20,500) :: energy, g
+      real*8 Ryd, keV
+      common/ions/ ionList, nbLevels, energy, g, nbIons
+      integer, dimension(6,3)  :: corrsp ! correspondance m=1,20 et i=1,6 + k=1,3
+      data corrsp(1,:)/ 3, 2, 1/
+      data corrsp(2,:)/ 6, 5, 4/
+      data corrsp(3,:)/ 9, 8, 7/
+      data corrsp(4,:)/12,11,10/
+      data corrsp(5,:)/15,14,13/
+      data corrsp(6,:)/18,17,16/
+      data Ryd  / 13.605693D0  /!eV    | Rydberg
+      data keV  / 8.6173303D-5 /!eV/k  | Constante de Boltzman
       
 c
 c     Ecrire xNelec, nombre d'electron pour chaque espece
@@ -164,7 +179,7 @@ c     Appeler subroutine fct partition
       do i = 1,6
          do k=1,3
             U(i,k) = fctpart(Z(i),xNelec(i,k),T)
-            chiz(i,k) = ionlevel(Z(i), xNelec(i, k))
+            chiz(i,k) = ionlevel(Z(i), xNelec(i, k)) ! E/kT
 C             print*, Z(i), xNelec(i, k), U(i, k), chiz(i, k)
          enddo
       enddo
@@ -213,16 +228,18 @@ c
          xNz(i,3) = xNz(i,2)*phi2(i)/xNe
       enddo
 c
-c     Calcul des populations des niv energie HI
+c     Calcul des populations des niv energie 
 c
-c      do i=1,6
-c         do k=1,3
-c            do n=1,30      !peut changer le nbr ici
-c               xNive(i,k,n) = (xNz(i,k)*g(i,k,n)/U(i,k))     !les ener /k en eV ou pas ?
-c               .*exp(-(eps(i,k,n)-eps(i,k,1))/T)
-c            enddo
-c         enddo
-c      enddo
+      do i = 1,6
+         do k = 1,3
+            j = corrsp(i, k)
+C             print*, j, ionList(j, :)
+            do m = 1, nbLevels(j)
+               xNive(i, k, m) = xNz(i, k) * g(j, m) / U(i, k) *
+     .                          exp(-energy(j, m)*Ryd/keV/T)
+            enddo
+         enddo
+      enddo
 c
 c     Calcul de la densite de masse
 c      
@@ -823,6 +840,7 @@ c
 
          end do
          nbLevels(i) = j-1
+         close(211)
       
       end do
       
