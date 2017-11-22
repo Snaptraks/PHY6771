@@ -47,6 +47,7 @@ c     Parametres modele
       sb=2.*(pi**5.)*(ek**4.)/(15.*(h**3.)*(c0**2.))
       Htot=sb*(Teff**4.)/(4.*pi)
       
+
       ! Lire les fichiers topbase
       call initiateEnergyLevels()
       
@@ -183,6 +184,7 @@ c     Appeler subroutine fct partition
 C             print*, Z(i), xNelec(i, k), U(i, k), chiz(i, k)
          enddo
       enddo
+
 c     
 c     Calcul xNtot
       xNtot = P/(ek*T)
@@ -728,6 +730,7 @@ c
          enddo
  603     continue
       enddo
+
 c
       return
 c
@@ -911,3 +914,150 @@ c
       
       
       
+
+      
+      ! Lit les fichiers de topbase et entre les valeurs dans un
+      ! block common qui peut être réutilisé plus tard.
+      ! nbLevels = nombre de niveaux d'énerie pour chaque ions
+      ! energy   = énergie des différents niveaux pour chaque ions
+      ! g        = poinds statistique pour calculer les fonctions de partitions
+      SUBROUTINE initiateEnergyLevels()
+      
+      implicit none
+      integer,dimension(20,2)  :: ionList
+      integer,dimension(20)    :: nbLevels
+      real*8,dimension(20,500) :: energy, g
+      integer        :: nbIons, atomicNumber, electronNumber
+      integer        :: i, j, k, NZread, NEread, nbl, io
+      character*6    :: filename, tmpChar
+      
+      common/ions/ ionList, nbLevels, energy, g, nbIons
+      
+      !List of ions
+      ionList(1,:) =  [8 ,6 ] !OIII
+      ionList(2,:) =  [8 ,7 ] !OII
+      ionList(3,:) =  [8 ,8 ] !OI
+      ionList(4,:) =  [10,8 ] !NeIII
+      ionList(5,:) =  [10,9 ] !NeII
+      ionList(6,:) =  [10,10] !NeI
+      ionList(7,:) =  [11,9 ] !NaIII
+      ionList(8,:) =  [11,10] !NaII
+      ionList(9,:) =  [11,11] !NaI
+      ionList(10,:) = [12,10] !MgIII
+      ionList(11,:) = [12,11] !MgII
+      ionList(12,:) = [12,12] !MgI
+      ionList(13,:) = [13,11] !AlIII
+      ionList(14,:) = [13,12] !AlII
+      ionList(15,:) = [13,13] !AlI
+      ionList(16,:) = [14,12] !SiIII
+      ionList(17,:) = [14,13] !SiII
+      ionList(18,:) = [14,14] !SiI
+      nbIons = 18
+      
+      !Ouvrir et lire les fichiers topbase
+      do i=1,nbIons
+         atomicNumber = ionList(i,1)
+         electronNumber = ionList(i,2)
+         
+         if (atomicNumber < 10) then !Trouver le nom du fichier, ZXXEXX
+            write (filename,'(A2,I1)') 'Z0',atomicNumber
+         else
+            write (filename,'(A1,I2)') 'Z',atomicNumber
+         end if
+         if (electronNumber < 10) then
+            write (tmpChar,'(A2,I1)') 'E0',electronNumber
+         else
+            write (tmpChar,'(A1,I2)') 'E',electronNumber
+         end if
+         
+         filename = trim(filename)//trim(tmpChar) !Ouvrir le fichier
+         open(211,file='topbase/'//filename,status='old')
+         read(211,*) 
+         read(211,*) 
+         read(211,*) 
+         
+         do j=1,500 !Lire le fichier
+            read(211,'(8X,2I3,37X,2E13.5)',IOSTAT=io) NZread, NEread,
+     $                                            energy(i,j), g(i,j)
+            if (io < 0) EXIT !End of file
+            !Erreurs possibles
+            if (NZread /= atomicNumber .or. NEread /=  electronNumber) 
+     $             STOP 'Error during topbase files reading.
+     $                   Atomic/electron number mismatch.'
+     
+            if (j>1 .and. energy(i,j) < energy(i,j-1)) 
+     $             STOP 'Error during topbase files reading.
+     $                   Energy levels in wrong order.'
+
+         end do
+         nbLevels(i) = j-1
+      
+      end do
+      
+      END SUBROUTINE initiateEnergyLevels
+      
+      
+      ! Calcule la fonction de partition pour une température T (real*8),
+      ! un numéro atomique atomicNumber (integer) et un nombre d'électron
+      ! electronNumber (integer)
+      ! La sous-routine initiateEnergyLevels doit avoir été appelée une
+      ! fois avant.
+      FUNCTION fctpart(atomicNumber, electronNumber, T) result(U)
+      
+      implicit none
+      integer, intent(in)      :: atomicNumber, electronNumber
+      real*8, intent(in)       :: T
+      integer,dimension(20,2)  :: ionList
+      integer,dimension(20)    :: nbLevels
+      real*8,dimension(20,500) :: energy, g
+      real*8                   :: Ryd, keV, U, partitionHydrogene
+      integer                  :: i, j, nbIons
+      data Ryd  / 13.605693D0  /!eV    | Rydberg
+      data keV  / 8.6173303D-5 /!eV/k  | Constante de Boltzman
+      
+      common/ions/ ionList, nbLevels, energy, g, nbIons
+      
+      !Hydrogène
+      U = 0.d0
+      if (atomicNumber==1 .and. electronNumber==1) then 
+         U = partitionHydrogene(T,16)
+         
+      !Les autres ions 
+      else 
+         U = 0.d0                                          
+         do i=1,nbIons+1 !Trouver l'index dans les tableaux
+            if (ionList(i,1) == atomicNumber .and. 
+     $          ionList(i,2) == electronNumber) EXIT
+         end do
+         
+         if (i==nbIons+1) STOP 'Ion does not exit'
+         
+         do j=1,nbLevels(i) !Calculer U
+            U = U + g(i,j)* EXP(-energy(i,j)*Ryd/keV/T )
+         end do
+      end if
+
+      END FUNCTION fctpart
+      
+      !Fonction de partition de l'hydrogène
+      !Notes de Gilles Fontaine, éq. 1.19, page 16
+      FUNCTION partitionHydrogene(T, nlimit) result(U)
+         
+         implicit none
+         integer, intent(in)  :: nlimit
+         real*8, intent(in)   :: T
+         integer              :: i, j
+         real*8               :: U, Ryd, keV
+         data Ryd  / 13.605693D0  /!eV    | Rydberg
+         data keV  / 8.6173303D-5 /!eV/k  | Constante de Boltzman
+
+         U = 0.d0
+         do i=1,nlimit
+            U = U + 2.d0*(DBLE(i)**2) * EXP(-Ryd/keV/T * 
+     $          (1.d0-1.d0/(i**2)))
+         end do
+
+      END FUNCTION partitionHydrogene
+      
+      
+
