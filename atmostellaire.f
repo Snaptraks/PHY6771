@@ -17,6 +17,7 @@ c
       common/fluxmoyencouche/xJC(100),xBC(100),xHC(100) !
 c
       open(21,file='atmo_6771_cooldau',status='old')
+         
 c
       nfreq=0.
       do i=1,500
@@ -658,20 +659,21 @@ C       pour le niveau d'ionisation n.
       
       ! Lit les fichiers de topbase et entre les valeurs dans un
       ! block common qui peut être réutilisé plus tard.
-      ! nbLevels = nombre de niveaux d'énerie pour chaque ions
-      ! energy   = énergie des différents niveaux pour chaque ions
-      ! g        = poinds statistique pour calculer les fonctions de partitions
+      ! nbLevels   = nombre de niveaux d'énerie pour chaque ions
+      ! energy     = énergie des différents niveaux pour chaque ions
+      ! diffEnergy = différence d'énergie des différents niveaux avec le fondamental pour chaque ions
+      ! g          = poinds statistique pour calculer les fonctions de partitions
       SUBROUTINE initiateEnergyLevels()
       
       implicit none
-      integer,dimension(20,2)  :: ionList
-      integer,dimension(20)    :: nbLevels
-      real*8,dimension(20,500) :: energy, g
+      integer,dimension(20,2)     :: ionList
+      integer,dimension(20,20)    :: nbLevels               !(atomicNumber,electronNumber)
+      real*8,dimension(20,20,500) :: energy, diffEnergy, g  !(atomicNumber,electronNumber,level)
       integer        :: nbIons, atomicNumber, electronNumber
       integer        :: i, j, k, NZread, NEread, nbl, io
       character*6    :: filename, tmpChar
       
-      common/ions/ ionList, nbLevels, energy, g, nbIons
+      common/ions/ nbLevels, energy, diffEnergy, g, nbIons
       
       !List of ions
       ionList(1,:) =  [8 ,6 ] !OIII
@@ -716,21 +718,14 @@ C       pour le niveau d'ionisation n.
          read(211,*) 
          read(211,*) 
          
-         do j=1,500 !Lire le fichier
-            read(211,'(8X,2I3,37X,2E13.5)',IOSTAT=io) NZread, NEread,
-     $                                            energy(i,j), g(i,j)
+         do j=1,500
+            read(211,'(8X,2I3,24X,3E13.5)',IOSTAT=io) NZread, NEread,
+     $      energy(atomicNumber,electronNumber,j),
+     $      diffEnergy(atomicNumber,electronNumber,j),
+     $      g(atomicNumber,electronNumber,j)
             if (io < 0) EXIT !End of file
-            !Erreurs possibles
-            if (NZread /= atomicNumber .or. NEread /=  electronNumber) 
-     $             STOP 'Error during topbase files reading.
-     $                   Atomic/electron number mismatch.'
-     
-            if (j>1 .and. energy(i,j) < energy(i,j-1)) 
-     $             STOP 'Error during topbase files reading.
-     $                   Energy levels in wrong order.'
-
-         end do
-         nbLevels(i) = j-1
+         end do          
+         nbLevels(atomicNumber,electronNumber) = j-1
       
       end do
       
@@ -738,42 +733,35 @@ C       pour le niveau d'ionisation n.
       
       
       ! Calcule la fonction de partition pour une température T (real*8),
-      ! un numéro atomique atomicNumber (integer) et un nombre d'électron
-      ! electronNumber (integer)
+      ! un numéro atomique atNum (integer) et un nombre d'électron
+      ! elecNum (integer)
       ! La sous-routine initiateEnergyLevels doit avoir été appelée une
       ! fois avant.
-      FUNCTION fctpart(atomicNumber, electronNumber, T) result(U)
+      FUNCTION fctpart(T, atNum, elecNum) result(U)
       
       implicit none
-      integer, intent(in)      :: atomicNumber, electronNumber
-      real*8, intent(in)       :: T
-      integer,dimension(20,2)  :: ionList
-      integer,dimension(20)    :: nbLevels
-      real*8,dimension(20,500) :: energy, g
-      real*8                   :: Ryd, keV, U, partitionHydrogene
-      integer                  :: i, j, nbIons
+      integer, intent(in)         :: atNum, elecNum
+      real*8, intent(in)          :: T
+      integer,dimension(20,20)    :: nbLevels
+      real*8,dimension(20,20,500) :: energy,diffEnergy, g
+      real*8                      :: Ryd, keV, U, partitionHydrogene
+      integer                     :: i, j, nbIons
       data Ryd  / 13.605693D0  /!eV    | Rydberg
       data keV  / 8.6173303D-5 /!eV/k  | Constante de Boltzman
       
-      common/ions/ ionList, nbLevels, energy, g, nbIons
+      common/ions/ nbLevels, energy, diffEnergy, g, nbIons
       
       !Hydrogène
       U = 0.d0
-      if (atomicNumber==1 .and. electronNumber==1) then 
+      if (atNum==1 .and. elecNum==1) then 
          U = partitionHydrogene(T,16)
          
       !Les autres ions 
       else 
-         U = 0.d0                                          
-         do i=1,nbIons+1 !Trouver l'index dans les tableaux
-            if (ionList(i,1) == atomicNumber .and. 
-     $          ionList(i,2) == electronNumber) EXIT
-         end do
-         
-         if (i==nbIons+1) STOP 'Ion does not exit'
-         
-         do j=1,nbLevels(i) !Calculer U
-            U = U + g(i,j)* EXP(-energy(i,j)*Ryd/keV/T )
+         U = 0.d0   
+         do j=1,nbLevels(atNum, elecNum)
+            U = U + g(atNum, elecNum, j)* 
+     $      EXP(-diffEnergy(atNum, elecNum, j)*Ryd/keV/T )
          end do
       end if
 
