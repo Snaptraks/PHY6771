@@ -737,7 +737,7 @@ C       pour le niveau d'ionisation n.
       ! elecNum (integer)
       ! La sous-routine initiateEnergyLevels doit avoir été appelée une
       ! fois avant.
-      FUNCTION fctpart(T, atNum, elecNum) result(U)
+      FUNCTION fctpart(atNum, elecNum, T) result(U)
       
       implicit none
       integer, intent(in)         :: atNum, elecNum
