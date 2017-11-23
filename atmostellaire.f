@@ -5,9 +5,11 @@ c
       implicit real*8 (a-h,o-z)
       real*4 time,dummy(2)
       dimension Tgris(100),Pgris(100) !
+      dimension Az(6)
       data ek,h,xme/1.38065d-16,6.6260755d-27,9.1093897d-28/ !constante boltz,planck,vitesselum,masseelec
       data pi,xmH,c0/3.141592654,1.67262310d-24,2.99792458d10/ !pi,mass H,c
       dimension deltaTsT(50,100),deltaHsH(50,100),condeq(50,100) !
+      common/abond/ Az ! abondances de O,Ne,Na,Mg,Al,Si
       common/ptsfreq/ freq(500),poidsint(500),xlam(500),nfreq  ! nu,w int,lambda
       common/couches/ tau(100),T(100),P(100),xKross(100),rho(100) !structure
       common/coeffscouchefreq/ xkappa(500,100),chi(500,100),sigma(100) !
@@ -15,6 +17,9 @@ c
       common/planckdT/ dtau(500,100),plnk(500,100) !delta tau,planck (a chaque couche)
       common/correction/ deltaT(100),deltaH(100),deltaB(100)
       common/fluxmoyencouche/xJC(100),xBC(100),xHC(100) !
+      
+      common/pops/ xNe,xNtot,xNz(6,3),xNive(6,3,500),rhod   ! xNive(6,3,?) tableau niv energie.. ?? combien de niveaux
+      
 c
       open(21,file='atmo_6771_cooldau',status='old')
 c
@@ -33,11 +38,22 @@ c     Parametres modele
       tau1=1.e-8
       tauND=1.e2
       ND=50
+      Az(1)=10.**-0.00 ! O
+      Az(2)=10.**-0.00 ! Ne
+      Az(3)=10.**-2.00 ! Na
+      Az(4)=10.**-2.00 ! Mg
+      Az(5)=10.**-2.50 ! Al
+      Az(6)=10.**-3.00 ! Si
+      
       sb=2.*(pi**5.)*(ek**4.)/(15.*(h**3.)*(c0**2.))
       Htot=sb*(Teff**4.)/(4.*pi)
       
-      !Lire les fichiers topbase
+      ! Lire les fichiers topbase
       call initiateEnergyLevels()
+      
+      call eqetat(1d4, 1d4)
+      
+      stop 'I CANCELLED IT'
 c
 c     Calcul de la structure grise
       call modelegris(tau1,tauND,Teff,xlogg,ND)
@@ -46,7 +62,8 @@ c     Garder en memoire la structure grise
          Tgris(id)=T(id)
          Pgris(id)=P(id)
       enddo
-C       write(*,*) 'structure grise done'
+      write(*,*) 'structure grise done'
+      stop
 c
 c     Calcul ETR pour modele gris
       call spectre(ND,xlogg)
@@ -102,66 +119,130 @@ c
       call etime(time,dummy)
       write(*,*) 'temps de calcul:',time
 c
-      end   !end program modeleHpure
+      end   !end program atmostellaire
 c   
 cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 c
       subroutine eqetat(P,T)
       implicit real*8 (a-h,o-z)
-      dimension gH(16),chiN(16)              ! gn et chin pour HI
-      data chiH1,chiHm/157896.0,8763.0/ !energie ionisation
+      integer Z, xNelec
+      real*8 fctpart, ionlevel
+      dimension AZ(6),xNelec(6,3) !
+      dimension phi1(6),phi2(6) !
+      dimension chiz(6,2),U(6,3)  ! (divisé par k en electron volt)
+      dimension TP(6),BT(6) ! top et bottom
+      dimension xmass(6),Z(6)
       data ek,h,xme/1.38065d-16,6.6260755d-27,9.1093897d-28/
-      data pi,xmH/3.141592654,1.67262310d-24/
-      data uH2,uHm,tol/1.,1.,1.d-7/
-      common/pops/ xN(4),xNH1(16),rhod   ! xN =(Ne,NH1,NH2,NH-),xNH1=population niv energie,densite
-
+      data pi/3.141592654/
+      ! masses des atomes, selon Google "mass <element> atom in grams"
+      data xmass/2.6566962d-23, ! O
+     .           3.3509177d-23, ! Ne
+     .           3.8175407d-23, ! Na
+     .           4.0359398d-23, ! Mg
+     .           4.4803895d-23, ! Al
+     .           4.6637066d-23/ ! Si
+      data tol/1.d-7/
+      data Z/8,10,11,12,13,14/ !O,Ne,Na,Mg,Al,Si
+      common/abond/ Az ! abondances de O,Ne,Na,Mg,Al,Si
+      common/pops/ xNe,xNtot,xNz(6,3),xNive(6,3,500),rhod   ! xNive(6,3,?) tableau niv energie.. ?? combien de niveaux
+      
+      integer,dimension(20,2)  :: ionList
+      integer,dimension(20)    :: nbLevels
+      real*8,dimension(20,500) :: energy, g
+      real*8 Ryd, keV
+      common/ions/ ionList, nbLevels, energy, g, nbIons
+      integer, dimension(6,3)  :: corrsp ! correspondance m=1,20 et i=1,6 + k=1,3
+      data corrsp(1,:)/ 3, 2, 1/
+      data corrsp(2,:)/ 6, 5, 4/
+      data corrsp(3,:)/ 9, 8, 7/
+      data corrsp(4,:)/12,11,10/
+      data corrsp(5,:)/15,14,13/
+      data corrsp(6,:)/18,17,16/
+      data Ryd  / 13.605693D0  /!eV    | Rydberg
+      data keV  / 8.6173303D-5 /!eV/k  | Constante de Boltzman
+      
 c
+c     Ecrire xNelec, nombre d'electron pour chaque espece
+      do i = 1,6
+         do k = 1,3 
+            xNelec(i,k)=Z(i)-(k-1)! Atome neutre a tous ses electrons
+         enddo
+      enddo
+c
+c     Appeler subroutine fct partition
+      do i = 1,6
+         do k=1,3
+            U(i,k) = fctpart(Z(i),xNelec(i,k),T)
+            chiz(i,k) = ionlevel(Z(i), xNelec(i, k)) ! E/kT
+C             print*, Z(i), xNelec(i, k), U(i, k), chiz(i, k)
+         enddo
+      enddo
+c     
 c     Calcul xNtot
       xNtot = P/(ek*T)
 c
-c     Calcul de gn et chiN et uH1 n=1,5
-      uH1 = 0.
-      do n = 1,16
-         gH(n) = 2.*(n**2.)
-         chiN(n) = chiH1*(1.-1./(n**2.))  !la constante de boltzman est incluse dans le chi
-         uH1 = uH1 + gH(n)*exp(-chiN(n)/T) 
-      enddo
-      
-c
 c     Calcul de phi1 et phi2
       A = (2.*pi*xme*ek*T/(h**2.))**(3./2.)
-      phi1 = ((2.*A/uH1)*exp(-chiH1/T))**(-1.)
-      phi2 = ((2.*A*uH1)*exp(-chiHm/T))**(-1.)
+      do i=1,6
+         phi1(i) = ((2.*A*U(i,2)/U(i,1))*exp(-chiz(i,1)/T))**(-1.)
+         phi2(i) = (2.*A*U(i,3)/U(i,2))*exp(-chiz(i,2)/T)
+      enddo
 c
 c     Calcul de Ne par Newton-Rawphson (boucle iterative)
-      xN(1) = ((1.+phi1*xNtot)**(1./2.)-1.)/phi1 !on pose une valeur initiale de Ne0
+      !on pose une valeur initiale de Ne0 comme si O pur
+      xNe = ((1.+phi1(1)*xNtot)**(1./2.)-1.)/phi1(1)
 c
-      do i = 1,100
-         TPH = 1.-(xN(1)**2.)*phi1*phi2
-         BTH = 1.+xN(1)*phi1+(xN(1)**2.)*phi1*phi2
-         F = xN(1) - (xNtot-xN(1))*(TPH/BTH)
-         dFdNe = 1.+(TPH/BTH)+(xNtot-xN(1))*(2.*xN(1)*phi1*phi2*BTH  ! calcul dF/dNe
-     .           +(phi1+2.*xN(1)*phi1*phi2)*TPH)/(BTH**2.)
-         xN(1) = xN(1)-F/dFdNe       ! on corrige Ne
-         if (abs(F/(dFdNe*xN(1))).lt.tol) goto 201 ! si F<tolerance,sort boucle
-         if (i.eq.100) stop 'non convergence eqetat'
+      do j = 1,100
+         sum1 = 0.
+         sum2 = 0.
+         do i = 1,6
+            TP(i) = xNe+2.*phi2(i)
+            BT(i) = phi2(i)+xNe+(xNe**2.)*phi1(i)
+            sum1 = sum1+Az(i)*TP(i)/BT(i)
+            sum2 = sum2+Az(i)*(BT(i)-TP(i)*(1+2.*xNe*phi1(i)))
+     .           /(BT(i)**2.)
+         enddo
+         F = xNe-(xNtot-xNe)*sum1
+         dFdNe = 1.+sum1-(xNtot-xNe)*sum2
+         
+         xNe = xNe-F/dFdNe       ! on corrige Ne
+         
+         if (abs(F/(dFdNe*xNe)).lt.tol) goto 201 ! si F<tolerance,sort boucle
+         if (j.eq.10) stop 'non convergence eqetat'
       enddo
 c
 c     Calcul des autres populations
 c
- 201  xN(3) = xN(1)/TPH
-      xN(4) = xN(3)*phi1*(xN(1)**2.)*phi2
-      xN(2) = xNtot - xN(1) - xN(3) - xN(4)
+ 201  continue
+c     
+      do i = 1,6
+         xNz(i,2) = (xNtot-xNe)*Az(i)*xNe/
+     .              (phi2(i)+xNe+(xNe**2.)*phi1(i))
+         xNz(i,1) = xNe*xNz(i,2)*phi1(i)
+         xNz(i,3) = xNz(i,2)*phi2(i)/xNe
+      enddo
 c
-c     Calcul des populations des niv energie HI
+c     Calcul des populations des niv energie 
 c
-      do n = 1,16
-         xNH1(n) = (xN(2)*gH(n)/uH1)*exp(-chiN(n)/T)
+      do i = 1,6
+         do k = 1,3
+            j = corrsp(i, k)
+C             print*, j, ionList(j, :)
+            do m = 1, nbLevels(j)
+               xNive(i, k, m) = xNz(i, k) * g(j, m) / U(i, k) *
+     .                          exp(-energy(j, m)*Ryd/keV/T)
+            enddo
+         enddo
       enddo
 c
 c     Calcul de la densite de masse
 c      
-      rhod = (xNtot-xN(1))*xmH   !nombre de noyaux H* masse H neutre
+      rhod = 0.
+      do i = 1,6
+         do k = 1,3
+            rhod = rhod+xNz(i,k)*xmass(i)
+         enddo
+      enddo
 c      
       return
 c
@@ -226,6 +307,7 @@ c     Calcul des integrales et opacR
          bot=bot+poidsint(j)*B
       enddo
       opacR=bot/top
+C       print*, bot, top
 c      
       return
 c
@@ -267,7 +349,7 @@ c     Calcul structure Press
          if (j.eq.30) stop 'non convergence P(1)'
       enddo
  202  continue
-C       write(*,*) 'P(1) done'
+      write(*,*) 'P(1) done'
 c
       tol=10**(-6.)
       do i=2,ND
@@ -640,22 +722,43 @@ c
          enddo
  603     continue
       enddo
-
+c
       return
-
+c
       end
-
-
-      function ionlevel(Z, n)
-C       Retourne les énerdies d'ionisations de l'atome de numéro atomique Z
-C       pour le niveau d'ionisation n.
-      integer Z, n
+c
+ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+c
+      function ionlevel(Z, n) result(chi)
+C       Retourne les energies d'ionisations de l'atome de numero atomique Z
+C       avec n electrons (ionise Z-n fois).
+      integer, intent(in) :: Z, n
+      real*8 chi, keV
+      integer i
+      real*8, dimension(6,3) :: energyLevel
+      integer, dimension(6)  :: ielem
       
-      ionlevel = 10. ! eV
+      ! CRC Handbook of Chemestry and Physics (eV)
+      data energyLevel(1,:)/13.61805, 35.1211,  54.9355 / ! O
+      data energyLevel(2,:)/21.56454, 40.96296, 63.45   / ! Ne
+      data energyLevel(3,:)/5.139076, 47.2864,  71.6200 / ! Na
+      data energyLevel(4,:)/7.646235, 15.03527, 80.1437 / ! Mg
+      data energyLevel(5,:)/5.985768, 18.82855, 28.44765/ ! Al
+      data energyLevel(6,:)/8.15168,  16.34584, 33.49302/ ! Si
       
-      return
-      end
+      data ielem/8, 10, 11, 12, 13, 14/
+      data keV  / 8.6173303D-5 /!eV/k  | Constante de Boltzman
       
+      do i=1,6
+         if (ielem(i) == Z) exit
+      enddo
+      
+      chi = energyLevel(i, Z-n+1)/keV
+      
+      end function ionlevel
+c
+ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+c
       ! Lit les fichiers de topbase et entre les valeurs dans un
       ! block common qui peut être réutilisé plus tard.
       ! nbLevels = nombre de niveaux d'énerie pour chaque ions
@@ -731,6 +834,7 @@ C       pour le niveau d'ionisation n.
 
          end do
          nbLevels(i) = j-1
+         close(211)
       
       end do
       
@@ -798,7 +902,6 @@ C       pour le niveau d'ionisation n.
          end do
 
       END FUNCTION partitionHydrogene
-      
       
       
       
