@@ -10,11 +10,13 @@
 3. Pour obtenir les tables pour un élément en particulier, aller dans Extract Element
 
 4. Entrer le domaine de longueurs d'onde nécessaire (Starting, Ending wavelength)
+
     J'utilise 1 à 100000 par exemple
     
 5. Entrer l'élément [et l'état d'ionisation, optionnel] de la forme: Al [2]
 
 6. Choisir Extraction format: Long format
+
     Ce n'est pas nécessaire pour notre code ici, mais mes scripts assument le Long format
     
 7. Choisir Retrieve data via: FTP
