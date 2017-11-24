@@ -1,6 +1,4 @@
-#########################################
 # Instructions pour les données de VALD #
-#########################################
 
 1. Se faire un compte sur http://vald.astro.uu.se/~vald/php/vald.php
     Contact / Registration, Contact Form, envoyer un message à l'administrateur
