@@ -10,27 +10,39 @@ c
       data pi,xmH,c0/3.141592654,1.67262310d-24,2.99792458d10/ !pi,mass H,c
       dimension deltaTsT(50,100),deltaHsH(50,100),condeq(50,100) !
       common/abond/ Az ! abondances de O,Ne,Na,Mg,Al,Si
-      common/ptsfreq/ freq(500),poidsint(500),xlam(500),nfreq  ! nu,w int,lambda
+      common/ptsfreq/ freq(50000),poidsint(50000),xlam(50000),nfreq  ! nu,w int,lambda
       common/couches/ tau(100),T(100),P(100),xKross(100),rho(100) !structure
-      common/coeffscouchefreq/ xkappa(500,100),chi(500,100),sigma(100) !
-      common/fluxall/ xJ(500,100),xH(500,100),xK(500,100),xHd(500,100) !
-      common/planckdT/ dtau(500,100),plnk(500,100) !delta tau,planck (a chaque couche)
+      common/coeffscouchefreq/ xkappa(50000,100),chi(50000,100),
+     .                         sigma(100) !
+      common/fluxall/ xJ(50000,100),xH(50000,100),xK(50000,100),
+     .                xHd(50000,100) !
+      common/planckdT/ dtau(50000,100),plnk(50000,100) !delta tau,planck (a chaque couche)
       common/correction/ deltaT(100),deltaH(100),deltaB(100)
       common/fluxmoyencouche/xJC(100),xBC(100),xHC(100) !
       
       common/pops/ xNe,xNtot,xNz(6,3),xNive(6,3,500),rhod   ! xNive(6,3,?) tableau niv energie.. ?? combien de niveaux
       
 c
-      open(21,file='atmo_6771_cooldau',status='old')
+c      open(21,file='atmo_6771_cooldau',status='old')
 c
-      nfreq=0.
-      do i=1,500
-         read(21,*,end=88) freq(i),poidsint(i),xlam(i)
-         nfreq=nfreq+1.
+c      nfreq=0.
+c      do i=1,50000
+c         read(21,*,end=88) freq(i),poidsint(i),xlam(i)
+c         nfreq=nfreq+1.
+c      enddo
+c 88   continue
+c      close(21)
+
+      nfreq=20001
+      do j=1,nfreq
+         xlam(j)=50.+float(j-1)
+         freq(j)=c0*1.d8/xlam(j)
       enddo
- 88   continue
-      close(21)
-      
+      poidsint(1)=0.5*(freq(1)-freq(2))
+      poidsint(nfreq)=0.5*(freq(nfreq-1)-freq(nfreq))
+      do j=2,nfreq-1
+         poidsint(j)=0.5*(freq(j-1)-freq(j+1))
+      enddo
 c 
 c     Parametres modele
       Teff=10000.
@@ -54,9 +66,9 @@ c     Parametres modele
       
       ! Lire les fichiers de VALD
       call initiateLineData()
-      
-      call eqetat(1d4, 1d4)
-      
+
+      call opac(1.d4, 1.d4)
+          
       stop 'I CANCELLED IT'
 c
 c     Calcul de la structure grise
@@ -256,34 +268,160 @@ ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 c
       subroutine opac(P,T)
       implicit real*8 (a-h,o-z)
+      integer z(6)    ! atomic number
       real rT       ! pression gazeuse,temperature,racineT
-      real nu0(16)  !freq coupure 
+      real nu0(16)  !freq coupure
+      real atmass(6) ! masse atomique des elements
+      real*8 ionlevel,loggf
       data ek,h,xme/1.38065d-16,6.6260755d-27,9.1093897d-28/
-      data pi,xmH/3.141592654,1.67262310d-24/
+      data pi,xmH,c0/3.141592654,1.67262310d-24,2.99792458d10/
+      data ekeV / 8.6173303D-5 / !  Constante de Boltzman en eV
       data A,B,C,alphadiff/2.815d29,3.29d15,3.69d8,6.6516d-25/  !constantes pour les alpha
-      common/pops/ xN(4),xNH1(16),rhod   ! xN =(Ne,NH1,NH2,NH-),xNH1=population niv energie,densite
-      common/ptsfreq/ freq(500),poidsint(500),xlam(500),nfreq 
-      common/coeff/ xkappa(500),chi(500),sigma  !/rho
+      data atmass/ 15.9994,20.1797,22.9897,24.305,26.9815,28.0855/
+      data z/8,10,11,12,13,14/ !O,Ne,Na,Mg,Al,Si
+      common/pops/ xNe,xNtot,xNz(6,3),xNive(6,3,500),rhod
+      common/ptsfreq/ freq(50000),poidsint(50000),xlam(50000),nfreq 
+      common/coeff/ xkappa(50000),chi(50000),sigma  !/rho
+      common/lines/ nbLines(6,3), wav0(6,3,10000), loggf(6,3,10000), 
+     .              eLowUp(6,3,10000,2), dampingParams(6,3,10000,3)
+      real*4 xxx(50000),yyy(50000)
 c
 c     Calcul des populations
       call eqetat(P,T)
 c
 c     Calcul de alphabf,alphaff,kappa,sigma,chi
-      rT = T**(1./2.)
-      sigma=xN(1)*alphadiff/rhod
+c      rT = T**(1./2.)
+c      sigma=xN(1)*alphadiff/rhod
 c      
+c      do j=1,nfreq
+c         xkappa(j)=xN(1)*xN(3)*C/((freq(j)**3.)*rT)
+c         do i=1,16
+c            nu0(i)=B/(i**2.)
+c            if (freq(j).ge.nu0(i)) then
+c               xkappa(j)=xkappa(j)+xNH1(i)*A/((i**5.)*(freq(j)**3.))
+c            endif
+c         enddo
+c         xkappa(j)=xkappa(j)*(1.-exp(-1.*h*freq(j)/(ek*T)))/rhod
+c         chi(j)=xkappa(j)+sigma
+c      enddo
+c
+      sigma=xNe*alphadiff/rhod
       do j=1,nfreq
-         xkappa(j)=xN(1)*xN(3)*C/((freq(j)**3.)*rT)
-         do i=1,16
-            nu0(i)=B/(i**2.)
-            if (freq(j).ge.nu0(i)) then
-               xkappa(j)=xkappa(j)+xNH1(i)*A/((i**5.)*(freq(j)**3.))
-            endif
-         enddo
-         xkappa(j)=xkappa(j)*(1.-exp(-1.*h*freq(j)/(ek*T)))/rhod
-         chi(j)=xkappa(j)+sigma
+         xkappa(j)=0.
+         chi(j)=sigma
       enddo
 c
+c     Calcul alphabb
+      tol = sigma
+c     Boucle sur les atomes
+      do i = 1,6
+c        Boucle sur les ions
+         do k = 1,3
+c           Boucle sur le nbr de raies pour une espece
+            do 100 n = 1,nbLines(i,k)
+               wl0=wav0(i,k,n)
+               fr0=c0*1.d8/wl0
+               if(wl0.gt.10000.) go to 100 ! Raie rejetee si > 10000 Angstroms
+
+c              Largeur de Doppler (voir eq. 5.43 et 5.49 des notes de Bergeron)
+               v0=12.85d5*dsqrt(t/1.d4/atmass(i))
+               dop=v0*fr0/c0
+
+c              Constantes de damping (voir eq. 3.34 et 3.35 de la these de Dufour)
+               if(dampingParams(i,k,n,1).ne.0.d0)then  ! Rad
+                  gam1=dexp(2.302585*dampingParams(i,k,n,1))
+               else
+                  gam1=2.4734d-22*fr0**2.
+               endif
+               if(dampingParams(i,k,n,2).ne.0.d0)then  ! Stark
+                  gam2=dexp(2.302585*dampingParams(i,k,n,2))*xNe
+               else
+                  ne=z(i)-k+1
+                  eioniz=ionlevel(z(i),ne)*ekev
+                  charge=float(k)-1.
+                  xneff=(charge+1.)**2.*13.595/(eioniz-eLowUp(i,k,n,2))
+                  if(xneff.lt.0.) xneff=0.
+                  gam2=1.d-8*xneff**2.5*xNe
+               endif
+               if(dampingParams(i,k,n,3).ne.0.d0)then  ! VdW
+                  gam3=dexp(2.302585*dampingParams(i,k,n,3))*
+     .                 xNz(1,1)*(1.d-4*t)**0.3 
+               else
+                  ne=z(i)-k+1
+                  eioniz=ionlevel(z(i),ne)*ekev
+                  charge=float(k)-1.
+                  xneff=(charge+1.)**2.*13.595/(eioniz-eLowUp(i,k,n,2))
+                  if(xneff.lt.0.) xneff=0.
+                  gam3=4.5d-9*(2.5*(xneff/(charge+1.))**2.)**0.4*
+     .                 xNz(1,1)*(1.d-4*t)**0.3
+               endif
+               gam=gam1+gam2+gam3
+
+c              Parametre d'elargissement (voir eq. 5.50 des notes de Bergeron)
+               aa=gam/4.d0/pi/dop
+
+c              Population du niveau inferieur
+               popul=xNz(i,k)/fctpart(z(i),z(i)-k+1,t)*
+     .               dexp(-eLowUp(i,k,n,1)/ekev/t)
+
+c              Opacite au centre de la raie (voir eq. 5.56 des notes de Bergeron)
+               uu=0.
+               prof0=voigt(aa,uu)/dsqrt(pi)/dop          ! Profil de Voigt
+               alpha0=0.02654*10.**(loggf(i,k,n))*prof0  ! Coeff. d'absorption
+               opac0=alpha0*popul                        ! Opacite
+               opac0=opac0*(1.-dexp(-h*fr0/ek/t))/rhod
+               if (opac0.lt.tol) goto 100  ! Raie rejetee si trop faible 
+
+c              Boucle sur les frequences
+               do j = 1,nfreq
+                  fr=freq(j)
+                  wl=c0*1.d8/fr
+                  dfr=fr-fr0
+                  dwl=wl-wl0
+
+c                 Opacite a +/- 100 Angstroms du centre de la raie
+                  if(abs(dwl).lt.100.)then
+                     uu=dfr/dop
+                     prof=voigt(aa,uu)/dsqrt(pi)/dop           ! Profil de Voigt
+                     alphabb=0.02654*10.**(loggf(i,k,n))*prof  ! Coeff. d'absorption
+                     opacbb=alphabb*popul                      ! Opacite
+                     opacbb=opacbb*(1.-dexp(-h*fr/ek/t))/rhod
+                     xkappa(j)=xkappa(j)+opacbb
+                     chi(j)=chi(j)+opacbb
+                  endif
+
+               enddo
+ 100        continue
+         enddo
+      enddo
+
+c      call sm_device_('postlandfile opacbb.ps')
+c      call sm_graphics_
+c      call sm_erase_
+c      call sm_lweight_(2.)
+c      call sm_expand_(1.0001)
+c      call sm_location_(5000,30000,5000,30000)
+c      call sm_limits_(3500.,7000.,-3.,9.)
+c      call sm_expand_(0.9)
+c      call sm_box_(1,2,0,0)
+c      call sm_expand_(1.3)
+c      call sm_xlabel_('\gl (\gV)')
+c      call sm_ylabel_('log \gc\d\gn/\gr')
+c      do j=1,nfreq
+c         xxx(j)=c0*1.d8/freq(j)
+c         yyy(j)=log10(chi(j))
+c      enddo
+c      call sm_conn_(xxx,yyy,nfreq)
+c      call sm_expand_(1.1)
+c      call sm_relocate_(3700.,7.7)
+c      call sm_putlabel_(6,'T = 10000 K')
+c      call sm_relocate_(4650.,7.7)
+c      call sm_putlabel_(6,'P = 10000 dynes/cm\u2')
+c      call sm_relocate_(3700.,6.7)
+c      call sm_putlabel_(6,'Bound-bound transitions'//
+c     .     ' + electron scattering')
+c      call sm_hardcopy_
+
       return
 c         
       end !opac
@@ -294,8 +432,8 @@ c
       implicit real*8 (a-h,o-z)
       data ek,h,xme/1.38065d-16,6.6260755d-27,9.1093897d-28/
       data pi,xmH,c0/3.141592654,1.67262310d-24,2.99792458d10/   ! 
-      common/ptsfreq/ freq(500),poidsint(500),xlam(500),nfreq ! nu,w int,lambda
-      common/coeff/ xkappa(500),chi(500),sigma  !sections efficaces/rho
+      common/ptsfreq/ freq(50000),poidsint(50000),xlam(50000),nfreq ! nu,w int,lambda
+      common/coeff/ xkappa(50000),chi(50000),sigma  !sections efficaces/rho
 c
 c     Calcul de l'opacite
       call opac(P,T)
@@ -323,7 +461,7 @@ c
       implicit real*8 (a-h,o-z)
       data ek,h,xme/1.38065d-16,6.6260755d-27,9.1093897d-28/ !
       data pi,xmH,c0/3.141592654,1.67262310d-24,2.99792458d10/    !
-      common/ptsfreq/ freq(500),poidsint(500),xlam(500),nfreq !
+      common/ptsfreq/ freq(50000),poidsint(50000),xlam(50000),nfreq !
       common/couches/ tau(100),T(100),P(100),xKross(100),rho(100)
 c
       tau(1)=tau1
@@ -556,12 +694,14 @@ c
       implicit real*8 (a-h,o-z)
       data ek,h,xme/1.38065d-16,6.6260755d-27,9.1093897d-28/ !
       data pi,xmH,c0/3.141592654,1.67262310d-24,2.99792458d10/ !
-      common/ptsfreq/ freq(500),poidsint(500),xlam(500),nfreq  ! nu,w int,lambda
+      common/ptsfreq/ freq(50000),poidsint(50000),xlam(50000),nfreq  ! nu,w int,lambda
       common/flux/ xJnu(100),xHnu(100),xKnu(100) !
-      common/fluxall/ xJ(500,100),xH(500,100),xK(500,100),xHd(500,100) !
-      common/coeff/ xkappad(500),chid(500),sigmad  !sections efficaces
-      common/coeffscouchefreq/ xkappa(500,100),chi(500,100),sigma(100) !
-      common/planckdT/ dtau(500,100),plnk(500,100)         !delta tau,planck (a chaque couche)
+      common/fluxall/ xJ(50000,100),xH(50000,100),xK(50000,100),
+     .                xHd(50000,100) !
+      common/coeff/ xkappad(50000),chid(50000),sigmad  !sections efficaces
+      common/coeffscouchefreq/ xkappa(50000,100),chi(50000,100),
+     .                         sigma(100) !
+      common/planckdT/ dtau(50000,100),plnk(50000,100)         !delta tau,planck (a chaque couche)
       common/plnkdTlamnu/ dtaunu(100),plnknu(100),xlamnu(100) !
       common/couches/ tau(100),T(100),P(100),xKross(100),rho(100) !
       common/pops/ xN(4),xNH1(16),rhod   ! xN =(Ne,NH1,NH2,NH-),xNH1=population niv energie,densite
@@ -622,10 +762,12 @@ c
       dimension xkapJ(100),xkapP(100),chiF(100)    !
       data ek,h,xme/1.38065d-16,6.6260755d-27,9.1093897d-28/ !
       data pi,xmH,c0/3.141592654,1.67262310d-24,2.99792458d10/ !
-      common/ptsfreq/ freq(500),poidsint(500),xlam(500),nfreq  ! nu,w int,lambda
-      common/fluxall/ xJ(500,100),xH(500,100),xK(500,100),xHd(500,100) !
-      common/coeffscouchefreq/ xkappa(500,100),chi(500,100),sigma(100) !
-      common/planckdT/ dtau(500,100),plnk(500,100)         !delta tau,planck (a chaque couche)
+      common/ptsfreq/ freq(50000),poidsint(50000),xlam(50000),nfreq  ! nu,w int,lambda
+      common/fluxall/ xJ(50000,100),xH(50000,100),xK(50000,100),
+     .                xHd(50000,100) !
+      common/coeffscouchefreq/ xkappa(50000,100),chi(50000,100),
+     .                         sigma(100) !
+      common/planckdT/ dtau(50000,100),plnk(50000,100)         !delta tau,planck (a chaque couche)
       common/correction/ deltaT(100),deltaH(100),deltaB(100)
       common/couches/ tau(100),T(100),P(100),xKross(100),rho(100) !
       common/fluxmoyencouche/xJC(100),xBC(100),xHC(100) !
@@ -691,7 +833,7 @@ c
       implicit real*8 (a-h,o-z)
       data ek,h,xme/1.38065d-16,6.6260755d-27,9.1093897d-28/  !
       data pi,xmH,c0/3.141592654,1.67262310d-24,2.99792458d10/ !   
-      common/ptsfreq/ freq(500),poidsint(500),xlam(500),nfreq !
+      common/ptsfreq/ freq(50000),poidsint(50000),xlam(50000),nfreq !
       common/couches/ tau(100),T(100),P(100),xKross(100),rho(100) !
       common/correction/ deltaT(100),deltaH(100),deltaB(100)
 c
@@ -970,3 +1112,60 @@ C       print*, dampingParams(4, 1, 1, :)
       
       
       end subroutine initiateLineData
+
+
+      double precision function voigt(aa,xx)
+      implicit real*8(a-h,o-z)
+
+c     computes normalized voigt function for any x and any positive a
+
+      equivalence(z,zzz(1))
+      dimension c(31),zzz(2)
+      complex*16 z,zz,dcmplx,cdexp,cdcos
+      kilroy = 1
+      data q1,q2/9.42477796076938e0,0.564189583547756e0/
+      a = aa
+      x = xx
+      if(kilroy.eq.1) go to 106
+  100 if(a.eq.0.0e0) go to 105
+      a1 = 3.0d0*a
+      a2= a*a
+      if(a.lt.0.1e0) go to 101
+      fw = dmin1(q1*a,120.d0)
+      zz = dcmplx(-fw,q1*x)
+      z = cdexp(zz)
+      voigt = 0.0e0
+      go to 102
+  101 zz = dcmplx(q1*x,q1*a)
+      z = cdcos(zz)
+      fw=a2-x*x
+      fw = dmax1(fw,-120.e0)
+      voigt = q2*dexp(fw)*dcos(2.0e0*a*x)
+c 102 b1 = (1.0e0 - dble(z))*a*1.5e0
+c     b2 = -aimag(z)
+  102 b1=(1.0e0-zzz(1))*a*1.5e0
+      b2 = -zzz(2)
+      s = -8.0e0 - 1.5e0*x
+      t = s*s + 2.25e0*a2
+      do 104 n=1,31
+      t = t + s + 0.25e0
+      s = s + 0.5e0
+         b1= a1 - b1
+         b2 = -b2
+      if(t.gt.2.5d-12) go to 103
+      voigt = voigt - c(n)*a/3.0e0
+         go to 104
+  103    voigt= voigt + c(n)*(b1+b2*s)/t
+  104 continue
+      return
+c     calculation for a= 0
+  105 voigt = q2*dexp(-x*x)
+      return
+c     initialization of array c
+  106 kilroy = 0
+      do 107 n=1,31
+      t = -16 + n
+      c(n) = 0.0897935610625833e0*dexp(-(t/3.0e0)**2)
+  107 continue
+      go to 100
+      end
