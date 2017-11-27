@@ -23,6 +23,7 @@ c
 c
       open(21,file='atmo_6771_cooldau',status='old')
 c
+      open(33,file='greyStruct.txt')
       nfreq=0.
       do i=1,500
          read(21,*,end=88) freq(i),poidsint(i),xlam(i)
@@ -57,7 +58,7 @@ c     Parametres modele
       
       call eqetat(1d4, 1d4)
       
-      stop 'I CANCELLED IT'
+      !stop 'I CANCELLED IT'
 c
 c     Calcul de la structure grise
       call modelegris(tau1,tauND,Teff,xlogg,ND)
@@ -65,6 +66,7 @@ c     Garder en memoire la structure grise
       do id=1,ND
          Tgris(id)=T(id)
          Pgris(id)=P(id)
+         write(33,'(2e20.8)'), P(id),T(id)
       enddo
       write(*,*) 'structure grise done'
       stop
@@ -152,9 +154,9 @@ c
       
       integer,dimension(20,2)  :: ionList
       integer,dimension(20)    :: nbLevels
-      real*8,dimension(20,500) :: energy, g
+      real*8,dimension(20,500) :: diffEnergy, g
       real*8 Ryd, keV
-      common/ions/ ionList, nbLevels, energy, g, nbIons
+      common/ions/ ionList, nbLevels, diffEnergy, g, nbIons
       integer, dimension(6,3)  :: corrsp ! correspondance m=1,20 et i=1,6 + k=1,3
       data corrsp(1,:)/ 3, 2, 1/
       data corrsp(2,:)/ 6, 5, 4/
@@ -234,7 +236,7 @@ c
 C             print*, j, ionList(j, :)
             do m = 1, nbLevels(j)
                xNive(i, k, m) = xNz(i, k) * g(j, m) / U(i, k) *
-     .                          exp(-energy(j, m)*Ryd/keV/T)
+     .                          exp(-diffEnergy(j, m)*Ryd/keV/T)
             enddo
          enddo
       enddo
@@ -766,19 +768,19 @@ c
       ! Lit les fichiers de topbase et entre les valeurs dans un
       ! block common qui peut être réutilisé plus tard.
       ! nbLevels = nombre de niveaux d'énerie pour chaque ions
-      ! energy   = énergie des différents niveaux pour chaque ions
+      ! diffEnergy = différence d'énergie des différents niveaux avec le fondamental pour chaque ions
       ! g        = poinds statistique pour calculer les fonctions de partitions
       SUBROUTINE initiateEnergyLevels()
       
       implicit none
       integer,dimension(20,2)  :: ionList
       integer,dimension(20)    :: nbLevels
-      real*8,dimension(20,500) :: energy, g
+      real*8,dimension(20,500) :: diffEnergy, g
       integer        :: nbIons, atomicNumber, electronNumber
       integer        :: i, j, k, NZread, NEread, nbl, io
       character*6    :: filename, tmpChar
       
-      common/ions/ ionList, nbLevels, energy, g, nbIons
+      common/ions/ ionList, nbLevels, diffEnergy, g, nbIons
       
       !List of ions
       ionList(1,:) =  [8 ,6 ] !OIII
@@ -825,14 +827,14 @@ c
          
          do j=1,500 !Lire le fichier
             read(211,'(8X,2I3,37X,2E13.5)',IOSTAT=io) NZread, NEread,
-     $                                            energy(i,j), g(i,j)
+     $                                        diffEnergy(i,j), g(i,j)
             if (io < 0) EXIT !End of file
             !Erreurs possibles
             if (NZread /= atomicNumber .or. NEread /=  electronNumber) 
      $             STOP 'Error during topbase files reading.
      $                   Atomic/electron number mismatch.'
      
-            if (j>1 .and. energy(i,j) < energy(i,j-1)) 
+            if (j>1 .and. diffEnergy(i,j) < diffEnergy(i,j-1)) 
      $             STOP 'Error during topbase files reading.
      $                   Energy levels in wrong order.'
 
@@ -857,13 +859,13 @@ c
       real*8, intent(in)       :: T
       integer,dimension(20,2)  :: ionList
       integer,dimension(20)    :: nbLevels
-      real*8,dimension(20,500) :: energy, g
+      real*8,dimension(20,500) :: diffEnergy, g
       real*8                   :: Ryd, keV, U, partitionHydrogene
       integer                  :: i, j, nbIons
       data Ryd  / 13.605693D0  /!eV    | Rydberg
       data keV  / 8.6173303D-5 /!eV/k  | Constante de Boltzman
       
-      common/ions/ ionList, nbLevels, energy, g, nbIons
+      common/ions/ ionList, nbLevels, diffEnergy, g, nbIons
       
       !Hydrogène
       U = 0.d0
@@ -881,7 +883,7 @@ c
          if (i==nbIons+1) STOP 'Ion does not exit'
          
          do j=1,nbLevels(i) !Calculer U
-            U = U + g(i,j)* EXP(-energy(i,j)*Ryd/keV/T )
+            U = U + g(i,j)* EXP(-diffEnergy(i,j)*Ryd/keV/T )
          end do
       end if
 
