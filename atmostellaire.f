@@ -38,18 +38,22 @@ c     Parametres modele
       tau1=1.e-8
       tauND=1.e2
       ND=50
-      Az(1)=10.**-0.00 ! O
-      Az(2)=10.**-0.00 ! Ne
-      Az(3)=10.**-2.00 ! Na
-      Az(4)=10.**-2.00 ! Mg
-      Az(5)=10.**-2.50 ! Al
-      Az(6)=10.**-3.00 ! Si
+      ! Abondances du modèle de Vennes
+      Az(1)=1.20E+04 ! O
+      Az(2)=8.06E+03 ! Ne
+      Az(3)=4.53E+02 ! Na
+      Az(4)=7.20E+02 ! Mg
+      Az(5)=1.15E+02 ! Al
+      Az(6)=4.26E+01 ! Si
       
       sb=2.*(pi**5.)*(ek**4.)/(15.*(h**3.)*(c0**2.))
       Htot=sb*(Teff**4.)/(4.*pi)
       
       ! Lire les fichiers topbase
       call initiateEnergyLevels()
+      
+      ! Lire les fichiers de VALD
+      call initiateLineData()
       
       call eqetat(1d4, 1d4)
       
@@ -208,7 +212,7 @@ c
          xNe = xNe-F/dFdNe       ! on corrige Ne
          
          if (abs(F/(dFdNe*xNe)).lt.tol) goto 201 ! si F<tolerance,sort boucle
-         if (j.eq.10) stop 'non convergence eqetat'
+         if (j.eq.100) stop 'non convergence eqetat'
       enddo
 c
 c     Calcul des autres populations
@@ -903,5 +907,66 @@ c
 
       END FUNCTION partitionHydrogene
       
+      ! Lit les fichiers de VALD et entre les valeurs dans un
+      ! block common qui peut être réutilisé plus tard.
+      ! nbLines = nombre de raies pour chaque ion
+      ! wav0    = longueur d'onde en angstrom des raies
+      ! loggf   = log10 de la force d'oscillateur multiplié par
+      !           le poid statistique
+      ! eLowUp  = énergies des niveaux inférieurs eLowUp(..., 1)
+      !           et supérieurs eLowUp(..., 2) en eV
+      ! dampingParams = paramètres d'élargissements (pour le profil des raies)
+      !                 dampingParams(..., 1): Rad
+      !                 dampingParams(..., 2): Stark
+      !                 dampingParams(..., 3): Waals
+      subroutine initiateLineData()
+      
+      implicit none
+      real*8, dimension(6, 3, 10000)    :: wav0, loggf
+      real*8, dimension(6, 3, 10000, 2) :: eLowUp ! énergies des niveaux inf/sup    
+      real*8, dimension(6, 3, 10000, 3) :: dampingParams
+      integer, dimension(6, 3)          :: nbLines
+      integer, dimension(6)             :: ionList
+      integer i, j, k, Z, E
+      character*6 filename, tmpChar
+      data ionList /8, 10, 11, 12, 13, 14/ ! O, Ne, Na, Mg, Al, Si
+      
+      common/lines/ nbLines, wav0, loggf, eLowUp, dampingParams
+      
+      do j = 1, 6
+         do k = 1, 3
+            Z = ionList(j)  ! numéro atomique
+            E = Z - (k - 1) ! nombre d'électrons
+         
+            if (Z < 10) then !Trouver le nom du fichier, ZXXEXX
+               write (filename,'(A2,I1)') 'Z0',Z
+            else
+               write (filename,'(A1,I2)') 'Z',Z
+            end if
+            if (E < 10) then
+               write (tmpChar,'(A2,I1)') 'E0',E
+            else
+               write (tmpChar,'(A1,I2)') 'E',E
+            end if
+            filename = trim(filename)//trim(tmpChar) !Ouvrir le fichier
+            
+            open(212, file='VALD/input/'//filename//'.dat',
+     .                status = 'old')
+            read(212, *) ! header line
+            read(212, *, end = 99) (wav0(j, k, i), loggf(j, k, i),
+     .        eLowUp(j, k, i, :), dampingParams(j, k, i, :), i=1,10000)
+  99        continue
+            close(212)
+  
+            nbLines(j, k) = i - 1
+            
+         enddo
+      enddo
+      
+C       print*, wav0(4, 1, 1), loggf(4, 1, 1)
+C       print*, eLowUp(4, 1, 1, :)
+C       print*, dampingParams(4, 1, 1, :)
       
       
+      
+      end subroutine initiateLineData
