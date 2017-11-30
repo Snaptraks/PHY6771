@@ -25,8 +25,8 @@ c
 c
 c
       open(33,file='greyStruct.txt')
-      open(654,file='Hnu300.txt')
-      open(123,file='out_kapanu_bf300.txt')
+      open(654,file='Hnu.txt')
+      open(123,file='out_kapanu_bf.txt')
  
 
       nfreq=19990
@@ -44,8 +44,8 @@ c
       
 c 
 c     Parametres modele
-      Teff=10000.
-      xlogg=4.0
+      Teff=10100.
+      xlogg=5.8
       tau1=1.e-8
       tauND=1.e2
       ND=50
@@ -56,18 +56,20 @@ c     Parametres modele
       Az(4)=7.20E+02 ! Mg
       Az(5)=1.15E+02 ! Al
       Az(6)=4.26E+01 ! Si
-
       Az = Az/Az(1)
       
-      !Az(1)=1.0E-30 ! O
-      !Az(2)=1.0E-30 ! Ne
-      !Az(3)=1.0 ! Na
-      !Az(4)=1.0E-30 ! Mg
-      !Az(5)=1.0E-30 ! Al
-      !Az(6)=1.0E-30 ! Si
+      !Abondances modifiées
+      
+      Az(1)=1.0 ! O
+      Az(2)=0.0 ! Ne
+      Az(3)=0.0 ! Na
+      Az(4)=0.0 ! Mg
+      Az(5)=0.0 ! Al
+      Az(6)=0.0 ! Si
 
 
-
+      
+      
 
       
       sb=2.*(pi**5.)*(ek**4.)/(15.*(h**3.)*(c0**2.))
@@ -79,8 +81,10 @@ c     Parametres modele
       
       ! Lire les fichiers de VALD
       call initiateLineData()
-
-      print*,P(1),T(1)
+      
+      !TEST
+      call opac(1.0D5,1.0D4)
+      STOP
 c
 c     Calcul de la structure grise
       call modelegris(tau1,tauND,Teff,xlogg,ND)
@@ -90,8 +94,10 @@ c     Garder en memoire la structure grise
          Pgris(id)=P(id)
          write(33,'(3e20.8)'), tau(id),P(id),T(id)
       enddo
-      print*,P(1),T(1)
+      
       write(*,*) 'structure grise done'
+      
+      !,'P(1)&T(1): ',P(1),T(1)
       
 c
 c     Calcul ETR pour modele gris
@@ -261,7 +267,7 @@ c
       do i = 1,6
          do k = 1,3
             j = corrsp(i, k)
-C             print*, j, ionList(j, :)
+            !print*,'al', j, i, k
             do m = 1, nbLevels(j)
                xNive(i, k, m) = xNz(i, k) * g(j, m) / U(i, k) *
      .                          exp(-diffEnergy(j, m)*Ryd/keV/T)
@@ -326,14 +332,15 @@ c     Calcul des populations
       do i=1,nfreq !Fréquences
          Bfactor = (1.d0-dble(exp(-h*freq(i)/ek/T)))
          do j=1,18 !Ions autres
-            atNum = ionListXS(j,1)
-            ionNum = atNum-ionListXS(j,2)+1
-            !print*,atNum,ionNum
+            atNum = (int(float(j)/3.05)) +1
+            ionNum = (MODULO(float(j),3.05)-4.0)*-1.0
+            !print*,j,atNum,ionNum
             do k=1,nbLevelsXS(j) !Niveaux
                alphabf = xSections(j,k,i)
                xkappa(i) = xkappa(i) + alphabf*xNive(atNum,ionNum,k)*
      $                     Bfactor/rhod
                chi(i) = chi(i)+xkappa(i)
+               
                !print*,alphabf,xkappa(i),xNive(atNum,ionNum,k)
             end do
          end do
@@ -341,7 +348,6 @@ c     Calcul des populations
       end do
 
       close(123)
-
       !ENLEVÉ BOUND-BOUND
       
 c     Calcul alphabb
@@ -432,7 +438,6 @@ c                 Opacite a +/- 100 Angstroms du centre de la raie
          write(124,'(3e20.10)') xlam(i),xkappa(i),chi(j)
       end do
       close(124)
-      
       return
 c         
       end !opac
