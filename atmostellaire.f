@@ -10,27 +10,37 @@ c
       data pi,xmH,c0/3.141592654,1.67262310d-24,2.99792458d10/ !pi,mass H,c
       dimension deltaTsT(50,100),deltaHsH(50,100),condeq(50,100) !
       common/abond/ Az ! abondances de O,Ne,Na,Mg,Al,Si
-      common/ptsfreq/ freq(500),poidsint(500),xlam(500),nfreq  ! nu,w int,lambda
+      common/ptsfreq/ freq(20000),poidsint(20000),xlam(20000),nfreq  ! nu,w int,lambda
       common/couches/ tau(100),T(100),P(100),xKross(100),rho(100) !structure
-      common/coeffscouchefreq/ xkappa(500,100),chi(500,100),sigma(100) !
-      common/fluxall/ xJ(500,100),xH(500,100),xK(500,100),xHd(500,100) !
-      common/planckdT/ dtau(500,100),plnk(500,100) !delta tau,planck (a chaque couche)
+      common/coeffscouchefreq/ xkappa(20000,100),chi(20000,100),
+     $                         sigma(100) 
+      common/fluxall/ xJ(20000,100),xH(20000,100),xK(20000,100),
+     $                xHd(20000,100) 
+      common/planckdT/ dtau(20000,100),plnk(20000,100) !delta tau,planck (a chaque couche)
       common/correction/ deltaT(100),deltaH(100),deltaB(100)
-      common/fluxmoyencouche/xJC(100),xBC(100),xHC(100) !
+      common/fluxmoyencouche/xJC(100),xBC(100),xHC(100) 
       
       common/pops/ xNe,xNtot,xNz(6,3),xNive(6,3,500),rhod   ! xNive(6,3,?) tableau niv energie.. ?? combien de niveaux
       
 c
-      open(21,file='atmo_6771_cooldau',status='old')
 c
       open(33,file='greyStruct.txt')
-      nfreq=0.
-      do i=1,500
-         read(21,*,end=88) freq(i),poidsint(i),xlam(i)
-         nfreq=nfreq+1.
+      open(654,file='Hnu300.txt')
+      open(123,file='out_kapanu_bf300.txt')
+ 
+
+      nfreq=19990
+      do j=1,nfreq
+         xlam(j)=50.+float(j-1)
+         freq(j)=c0*1.d8/xlam(j)
       enddo
- 88   continue
-      close(21)
+      poidsint(1)=0.5*(freq(1)-freq(2))
+      poidsint(nfreq)=0.5*(freq(nfreq-1)-freq(nfreq))
+      do j=2,nfreq-1
+         poidsint(j)=0.5*(freq(j-1)-freq(j+1))
+      enddo
+
+
       
 c 
 c     Parametres modele
@@ -46,19 +56,31 @@ c     Parametres modele
       Az(4)=7.20E+02 ! Mg
       Az(5)=1.15E+02 ! Al
       Az(6)=4.26E+01 ! Si
+
+      Az = Az/Az(1)
+      
+      !Az(1)=1.0E-30 ! O
+      !Az(2)=1.0E-30 ! Ne
+      !Az(3)=1.0 ! Na
+      !Az(4)=1.0E-30 ! Mg
+      !Az(5)=1.0E-30 ! Al
+      !Az(6)=1.0E-30 ! Si
+
+
+
+
       
       sb=2.*(pi**5.)*(ek**4.)/(15.*(h**3.)*(c0**2.))
       Htot=sb*(Teff**4.)/(4.*pi)
       
       ! Lire les fichiers topbase
       call initiateEnergyLevels()
+      call initiateCrossSections(nfreq)
       
       ! Lire les fichiers de VALD
       call initiateLineData()
-      
-      call eqetat(1d4, 1d4)
-      
-      !stop 'I CANCELLED IT'
+
+      print*,P(1),T(1)
 c
 c     Calcul de la structure grise
       call modelegris(tau1,tauND,Teff,xlogg,ND)
@@ -66,15 +88,19 @@ c     Garder en memoire la structure grise
       do id=1,ND
          Tgris(id)=T(id)
          Pgris(id)=P(id)
-         write(33,'(2e20.8)'), P(id),T(id)
+         write(33,'(3e20.8)'), tau(id),P(id),T(id)
       enddo
+      print*,P(1),T(1)
       write(*,*) 'structure grise done'
-      stop
+      
 c
 c     Calcul ETR pour modele gris
       call spectre(ND,xlogg)
 C       write(*,*) 'ETR gris done'
-c
+      do i=1,nfreq
+         write(654,'(2e20.8)'), xlam(i), xHd(i,1)
+      enddo
+      stop
 c     Iteration pour correction de structure temp
       kble=0
       do k=1,50
@@ -142,7 +168,7 @@ c
       data pi/3.141592654/
       ! masses des atomes, selon Google "mass <element> atom in grams"
       data xmass/2.6566962d-23, ! O
-     .           3.3509177d-23, ! Ne
+     .           3.5009177d-23, ! Ne
      .           3.8175407d-23, ! Na
      .           4.0359398d-23, ! Mg
      .           4.4803895d-23, ! Al
@@ -152,9 +178,9 @@ c
       common/abond/ Az ! abondances de O,Ne,Na,Mg,Al,Si
       common/pops/ xNe,xNtot,xNz(6,3),xNive(6,3,500),rhod   ! xNive(6,3,?) tableau niv energie.. ?? combien de niveaux
       
-      integer,dimension(20,2)  :: ionList
-      integer,dimension(20)    :: nbLevels
-      real*8,dimension(20,500) :: diffEnergy, g
+      integer,dimension(18,2)  :: ionList
+      integer,dimension(18)    :: nbLevels
+      real*8,dimension(18,500) :: diffEnergy, g
       real*8 Ryd, keV
       common/ions/ ionList, nbLevels, diffEnergy, g, nbIons
       integer, dimension(6,3)  :: corrsp ! correspondance m=1,20 et i=1,6 + k=1,3
@@ -166,6 +192,8 @@ c
       data corrsp(6,:)/18,17,16/
       data Ryd  / 13.605693D0  /!eV    | Rydberg
       data keV  / 8.6173303D-5 /!eV/k  | Constante de Boltzman
+      
+      !print*,P,T
       
 c
 c     Ecrire xNelec, nombre d'electron pour chaque espece
@@ -198,7 +226,7 @@ c     Calcul de Ne par Newton-Rawphson (boucle iterative)
       !on pose une valeur initiale de Ne0 comme si O pur
       xNe = ((1.+phi1(1)*xNtot)**(1./2.)-1.)/phi1(1)
 c
-      do j = 1,100
+      do j = 1,10000
          sum1 = 0.
          sum2 = 0.
          do i = 1,6
@@ -214,7 +242,7 @@ c
          xNe = xNe-F/dFdNe       ! on corrige Ne
          
          if (abs(F/(dFdNe*xNe)).lt.tol) goto 201 ! si F<tolerance,sort boucle
-         if (j.eq.100) stop 'non convergence eqetat'
+         if (j.eq.10000) stop 'non convergence eqetat'
       enddo
 c
 c     Calcul des autres populations
@@ -258,34 +286,153 @@ ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 c
       subroutine opac(P,T)
       implicit real*8 (a-h,o-z)
+      integer z(6)    ! atomic number
+      integer atNum, ionNum
       real rT       ! pression gazeuse,temperature,racineT
-      real nu0(16)  !freq coupure 
+      real nu0(16)  !freq coupure
+      real atmass(6) ! masse atomique des elements
+      real*8 ionlevel,loggf
+      real*8,dimension(18,500,20000)   :: xSections
+      integer,dimension(18)           :: nbLevelsXS
+      integer,dimension(18,2)        :: ionListXS
       data ek,h,xme/1.38065d-16,6.6260755d-27,9.1093897d-28/
-      data pi,xmH/3.141592654,1.67262310d-24/
+      data pi,xmH,c0/3.141592654,1.67262310d-24,2.99792458d10/
+      data ekeV / 8.6173303D-5 / !  Constante de Boltzman en eV
       data A,B,C,alphadiff/2.815d29,3.29d15,3.69d8,6.6516d-25/  !constantes pour les alpha
-      common/pops/ xN(4),xNH1(16),rhod   ! xN =(Ne,NH1,NH2,NH-),xNH1=population niv energie,densite
-      common/ptsfreq/ freq(500),poidsint(500),xlam(500),nfreq 
-      common/coeff/ xkappa(500),chi(500),sigma  !/rho
+      data atmass/ 15.9994,20.1797,22.9897,24.305,26.9815,28.0855/
+      data z/8,10,11,12,13,14/ !O,Ne,Na,Mg,Al,Si
+      common/pops/ xNe,xNtot,xNz(6,3),xNive(6,3,500),rhod
+      common/ptsfreq/ freq(20000),poidsint(20000),xlam(20000),nfreq 
+      common/coeff/ xkappa(20000),chi(20000),sigma  !/rho
+      common/lines/ nbLines(6,3), wav0(6,3,10000), loggf(6,3,10000), 
+     .              eLowUp(6,3,10000,2), dampingParams(6,3,10000,3)
+      common/crossSections/ xSections, nbLevelsXS, ionListXS
+      real*4 xxx(50000),yyy(50000)
 c
 c     Calcul des populations
       call eqetat(P,T)
-c
-c     Calcul de alphabf,alphaff,kappa,sigma,chi
-      rT = T**(1./2.)
-      sigma=xN(1)*alphadiff/rhod
-c      
+
+      sigma=xNe*alphadiff/rhod
       do j=1,nfreq
-         xkappa(j)=xN(1)*xN(3)*C/((freq(j)**3.)*rT)
-         do i=1,16
-            nu0(i)=B/(i**2.)
-            if (freq(j).ge.nu0(i)) then
-               xkappa(j)=xkappa(j)+xNH1(i)*A/((i**5.)*(freq(j)**3.))
-            endif
-         enddo
-         xkappa(j)=xkappa(j)*(1.-exp(-1.*h*freq(j)/(ek*T)))/rhod
-         chi(j)=xkappa(j)+sigma
+         xkappa(j)=0.
+         chi(j)=sigma
       enddo
-c
+
+      
+      
+
+      !Calcul alphabf
+      !print*,'nfreq',nfreq
+      do i=1,nfreq !Fréquences
+         Bfactor = (1.d0-dble(exp(-h*freq(i)/ek/T)))
+         do j=1,18 !Ions autres
+            atNum = ionListXS(j,1)
+            ionNum = atNum-ionListXS(j,2)+1
+            !print*,atNum,ionNum
+            do k=1,nbLevelsXS(j) !Niveaux
+               alphabf = xSections(j,k,i)
+               xkappa(i) = xkappa(i) + alphabf*xNive(atNum,ionNum,k)*
+     $                     Bfactor/rhod
+               chi(i) = chi(i)+xkappa(i)
+               !print*,alphabf,xkappa(i),xNive(atNum,ionNum,k)
+            end do
+         end do
+         write(123,'(2e20.10)') xlam(i),xkappa(i)
+      end do
+
+      close(123)
+
+      !ENLEVÉ BOUND-BOUND
+      
+c     Calcul alphabb
+      tol = sigma
+c     Boucle sur les atomes
+      do i = 1,6
+c        Boucle sur les ions
+         do k = 1,3
+c           Boucle sur le nbr de raies pour une espece
+            do 100 n = 1,nbLines(i,k)
+               wl0=wav0(i,k,n)
+               fr0=c0*1.d8/wl0
+               if(wl0.gt.10000.) go to 100 ! Raie rejetee si > 10000 Angstroms
+
+c              Largeur de Doppler (voir eq. 5.43 et 5.49 des notes de Bergeron)
+               v0=12.85d5*dsqrt(t/1.d4/atmass(i))
+               dop=v0*fr0/c0
+
+c              Constantes de damping (voir eq. 3.34 et 3.35 de la these de Dufour)
+               if(dampingParams(i,k,n,1).ne.0.d0)then  ! Rad
+                  gam1=dexp(2.302585*dampingParams(i,k,n,1))
+               else
+                  gam1=2.4734d-22*fr0**2.
+               endif
+               if(dampingParams(i,k,n,2).ne.0.d0)then  ! Stark
+                  gam2=dexp(2.302585*dampingParams(i,k,n,2))*xNe
+               else
+                  ne=z(i)-k+1
+                  eioniz=ionlevel(z(i),ne)*ekev
+                  charge=float(k)-1.
+                  xneff=(charge+1.)**2.*13.595/(eioniz-eLowUp(i,k,n,2))
+                  if(xneff.lt.0.) xneff=0.
+                  gam2=1.d-8*xneff**2.5*xNe
+               endif
+               if(dampingParams(i,k,n,3).ne.0.d0)then  ! VdW
+                  gam3=dexp(2.302585*dampingParams(i,k,n,3))*
+     .                 xNz(1,1)*(1.d-4*t)**0.3 
+               else
+                  ne=z(i)-k+1
+                  eioniz=ionlevel(z(i),ne)*ekev
+                  charge=float(k)-1.
+                  xneff=(charge+1.)**2.*13.595/(eioniz-eLowUp(i,k,n,2))
+                  if(xneff.lt.0.) xneff=0.
+                  gam3=4.5d-9*(2.5*(xneff/(charge+1.))**2.)**0.4*
+     .                 xNz(1,1)*(1.d-4*t)**0.3
+               endif
+               gam=gam1+gam2+gam3
+
+c              Parametre d'elargissement (voir eq. 5.50 des notes de Bergeron)
+               aa=gam/4.d0/pi/dop
+
+c              Population du niveau inferieur
+               popul=xNz(i,k)/fctpart(z(i),z(i)-k+1,t)*
+     .               dexp(-eLowUp(i,k,n,1)/ekev/t)
+
+c              Opacite au centre de la raie (voir eq. 5.56 des notes de Bergeron)
+               uu=0.
+               prof0=voigt(aa,uu)/dsqrt(pi)/dop          ! Profil de Voigt
+               alpha0=0.02654*10.**(loggf(i,k,n))*prof0  ! Coeff. d'absorption
+               opac0=alpha0*popul                        ! Opacite
+               opac0=opac0*(1.-dexp(-h*fr0/ek/t))/rhod
+               if (opac0.lt.tol) goto 100  ! Raie rejetee si trop faible 
+
+c              Boucle sur les frequences
+               do j = 1,nfreq
+                  fr=freq(j)
+                  wl=c0*1.d8/fr
+                  dfr=fr-fr0
+                  dwl=wl-wl0
+
+c                 Opacite a +/- 100 Angstroms du centre de la raie
+                  if(abs(dwl).lt.100.)then
+                     uu=dfr/dop
+                     prof=voigt(aa,uu)/dsqrt(pi)/dop           ! Profil de Voigt
+                     alphabb=0.02654*10.**(loggf(i,k,n))*prof  ! Coeff. d'absorption
+                     opacbb=alphabb*popul                      ! Opacite
+                     opacbb=opacbb*(1.-dexp(-h*fr/ek/t))/rhod
+                     xkappa(j)=xkappa(j)+opacbb
+                     chi(j)=chi(j)+opacbb
+                  endif
+
+               enddo
+ 100        continue
+         enddo
+      enddo
+      open(124,file='out_kapanu_all.txt')
+      do i=1,nfreq !Fréquences
+         write(124,'(3e20.10)') xlam(i),xkappa(i),chi(j)
+      end do
+      close(124)
+      
       return
 c         
       end !opac
@@ -296,9 +443,9 @@ c
       implicit real*8 (a-h,o-z)
       data ek,h,xme/1.38065d-16,6.6260755d-27,9.1093897d-28/
       data pi,xmH,c0/3.141592654,1.67262310d-24,2.99792458d10/   ! 
-      common/ptsfreq/ freq(500),poidsint(500),xlam(500),nfreq ! nu,w int,lambda
-      common/coeff/ xkappa(500),chi(500),sigma  !sections efficaces/rho
-c
+      common/ptsfreq/ freq(20000),poidsint(20000),xlam(20000),nfreq ! nu,w int,lambda
+      common/coeff/ xkappa(20000),chi(20000),sigma  !sections efficaces/rho
+      
 c     Calcul de l'opacite
       call opac(P,T)
 c
@@ -325,7 +472,7 @@ c
       implicit real*8 (a-h,o-z)
       data ek,h,xme/1.38065d-16,6.6260755d-27,9.1093897d-28/ !
       data pi,xmH,c0/3.141592654,1.67262310d-24,2.99792458d10/    !
-      common/ptsfreq/ freq(500),poidsint(500),xlam(500),nfreq !
+      common/ptsfreq/ freq(20000),poidsint(20000),xlam(20000),nfreq !
       common/couches/ tau(100),T(100),P(100),xKross(100),rho(100)
 c
       tau(1)=tau1
@@ -346,16 +493,19 @@ c
 c     Calcul structure Press
       tol=10.**(-6.)
       P(1)=1.
-      do j=1,30
+      do j=1,100
+      
+         !print*,j
          call ross(P(1),T(1),xKross(1))
+         !print*,xlogg,tau(1),xKross(1)
          xNewP=(10.**xlogg)*tau(1)/xKross(1)
          deltaP=abs((xNewP-P(1))/xNewP)
          P(1)=xNewP
+         !print*,xNewP
          if (deltaP.lt.tol) goto 202
-         if (j.eq.30) stop 'non convergence P(1)'
+         if (j.eq.100) stop 'non convergence P(1)'
       enddo
  202  continue
-      write(*,*) 'P(1) done'
 c
       tol=10**(-6.)
       do i=2,ND
@@ -558,16 +708,17 @@ c
       implicit real*8 (a-h,o-z)
       data ek,h,xme/1.38065d-16,6.6260755d-27,9.1093897d-28/ !
       data pi,xmH,c0/3.141592654,1.67262310d-24,2.99792458d10/ !
-      common/ptsfreq/ freq(500),poidsint(500),xlam(500),nfreq  ! nu,w int,lambda
+      common/ptsfreq/ freq(20000),poidsint(20000),xlam(20000),nfreq  ! nu,w int,lambda
       common/flux/ xJnu(100),xHnu(100),xKnu(100) !
-      common/fluxall/ xJ(500,100),xH(500,100),xK(500,100),xHd(500,100) !
-      common/coeff/ xkappad(500),chid(500),sigmad  !sections efficaces
-      common/coeffscouchefreq/ xkappa(500,100),chi(500,100),sigma(100) !
-      common/planckdT/ dtau(500,100),plnk(500,100)         !delta tau,planck (a chaque couche)
+      common/fluxall/ xJ(20000,100),xH(20000,100),xK(20000,100),
+     $                xHd(20000,100) !
+      common/coeff/ xkappad(20000),chid(20000),sigmad  !sections efficaces
+      common/coeffscouchefreq/ xkappa(20000,100),chi(20000,100),
+     $                         sigma(100) !
+      common/planckdT/ dtau(20000,100),plnk(20000,100)         !delta tau,planck (a chaque couche)
       common/plnkdTlamnu/ dtaunu(100),plnknu(100),xlamnu(100) !
       common/couches/ tau(100),T(100),P(100),xKross(100),rho(100) !
       common/pops/ xN(4),xNH1(16),rhod   ! xN =(Ne,NH1,NH2,NH-),xNH1=population niv energie,densite
-c
 c     Calcul des opac chaque couche
       do id=1,ND
          call opac(P(id),T(id))
@@ -624,10 +775,12 @@ c
       dimension xkapJ(100),xkapP(100),chiF(100)    !
       data ek,h,xme/1.38065d-16,6.6260755d-27,9.1093897d-28/ !
       data pi,xmH,c0/3.141592654,1.67262310d-24,2.99792458d10/ !
-      common/ptsfreq/ freq(500),poidsint(500),xlam(500),nfreq  ! nu,w int,lambda
-      common/fluxall/ xJ(500,100),xH(500,100),xK(500,100),xHd(500,100) !
-      common/coeffscouchefreq/ xkappa(500,100),chi(500,100),sigma(100) !
-      common/planckdT/ dtau(500,100),plnk(500,100)         !delta tau,planck (a chaque couche)
+      common/ptsfreq/ freq(20000),poidsint(20000),xlam(20000),nfreq  ! nu,w int,lambda
+      common/fluxall/ xJ(20000,100),xH(20000,100),xK(20000,100),
+     $                xHd(20000,100) !
+      common/coeffscouchefreq/ xkappa(20000,100),chi(20000,100),
+     $                         sigma(100) !
+      common/planckdT/ dtau(20000,100),plnk(20000,100)         !delta tau,planck (a chaque couche)
       common/correction/ deltaT(100),deltaH(100),deltaB(100)
       common/couches/ tau(100),T(100),P(100),xKross(100),rho(100) !
       common/fluxmoyencouche/xJC(100),xBC(100),xHC(100) !
@@ -693,7 +846,7 @@ c
       implicit real*8 (a-h,o-z)
       data ek,h,xme/1.38065d-16,6.6260755d-27,9.1093897d-28/  !
       data pi,xmH,c0/3.141592654,1.67262310d-24,2.99792458d10/ !   
-      common/ptsfreq/ freq(500),poidsint(500),xlam(500),nfreq !
+      common/ptsfreq/ freq(20000),poidsint(20000),xlam(20000),nfreq !
       common/couches/ tau(100),T(100),P(100),xKross(100),rho(100) !
       common/correction/ deltaT(100),deltaH(100),deltaB(100)
 c
@@ -762,6 +915,65 @@ C       avec n electrons (ionise Z-n fois).
       chi = energyLevel(i, Z-n+1)/keV
       
       end function ionlevel
+
+
+
+
+      SUBROUTINE initiateCrossSections(nfreq)
+
+      implicit none
+      integer,intent(in)       :: nfreq
+      integer                  :: i, j, k
+      integer,dimension(18,2)  :: ionList, ionListXS
+      integer,dimension(18)    :: nbLevels,nbLevelsXS
+      real*8,dimension(18,500) :: diffEnergy, g
+      real*8,dimension(18,500,20000) :: xSections
+      integer        :: nbIons, AN, EN
+      character*50   :: filename, tmpChar
+      real*8         :: xread
+
+      common/ions/ ionList, nbLevels, diffEnergy, g, nbIons
+      common/crossSections/ xSections, nbLevelsXS, ionListXS
+
+
+      ionListXS=ionList
+
+
+      do i=1,nbIons
+         nbLevelsXS(i) = nbLevels(i)
+         AN = ionList(i,1)
+         EN = ionList(i,2)
+         if (AN < 10) then !Trouver le nom du fichier, ZXXEXX
+            write (filename,'(A2,I1)') 'Z',AN
+         else
+            write (filename,'(A1,I2)') 'Z',AN
+         end if
+         if (EN < 10) then
+            write (tmpChar,'(A2,I1)') 'E',EN
+         else
+            write (tmpChar,'(A1,I2)') 'E',EN
+         end if
+         filename = 'Opacity_data/xsection_data/'//
+     $              trim(ADJUSTL(filename))//
+     $              trim(ADJUSTL(tmpChar))//'.txt'
+         open(987,file=trim(filename),status='old')
+         do j=1,nbLevels(i)
+            read(987,*)
+            read(987,*)
+            do k=1,nfreq
+               read(987,'(22X,E50.20)'),xread
+               if(xread < 0.0) xread = 0.0
+               xSections(i,j,k) = xread
+               !if(xread>0.0) print*,xread
+            end do
+         end do
+         
+      end do
+
+      close(987)
+      END SUBROUTINE initiateCrossSections
+
+
 c
 ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 c
@@ -773,9 +985,9 @@ c
       SUBROUTINE initiateEnergyLevels()
       
       implicit none
-      integer,dimension(20,2)  :: ionList
-      integer,dimension(20)    :: nbLevels
-      real*8,dimension(20,500) :: diffEnergy, g
+      integer,dimension(18,2)  :: ionList
+      integer,dimension(18)    :: nbLevels
+      real*8,dimension(18,500) :: diffEnergy, g
       integer        :: nbIons, atomicNumber, electronNumber
       integer        :: i, j, k, NZread, NEread, nbl, io
       character*6    :: filename, tmpChar
@@ -802,6 +1014,8 @@ c
       ionList(17,:) = [14,13] !SiII
       ionList(18,:) = [14,14] !SiI
       nbIons = 18
+
+      
       
       !Ouvrir et lire les fichiers topbase
       do i=1,nbIons
@@ -825,7 +1039,7 @@ c
          read(211,*) 
          read(211,*) 
          
-         do j=1,500 !Lire le fichier
+         do j=1,300 !Lire le fichier
             read(211,'(8X,2I3,37X,2E13.5)',IOSTAT=io) NZread, NEread,
      $                                        diffEnergy(i,j), g(i,j)
             if (io < 0) EXIT !End of file
@@ -857,9 +1071,9 @@ c
       implicit none
       integer, intent(in)      :: atomicNumber, electronNumber
       real*8, intent(in)       :: T
-      integer,dimension(20,2)  :: ionList
-      integer,dimension(20)    :: nbLevels
-      real*8,dimension(20,500) :: diffEnergy, g
+      integer,dimension(18,2)  :: ionList
+      integer,dimension(18)    :: nbLevels
+      real*8,dimension(18,500) :: diffEnergy, g
       real*8                   :: Ryd, keV, U, partitionHydrogene
       integer                  :: i, j, nbIons
       data Ryd  / 13.605693D0  /!eV    | Rydberg
@@ -871,10 +1085,11 @@ c
       U = 0.d0
       if (atomicNumber==1 .and. electronNumber==1) then 
          U = partitionHydrogene(T,16)
-         
+      
       !Les autres ions 
       else 
-         U = 0.d0                                          
+
+         U = 0.d0                            
          do i=1,nbIons+1 !Trouver l'index dans les tableaux
             if (ionList(i,1) == atomicNumber .and. 
      $          ionList(i,2) == electronNumber) EXIT
@@ -972,3 +1187,60 @@ C       print*, dampingParams(4, 1, 1, :)
       
       
       end subroutine initiateLineData
+
+
+      double precision function voigt(aa,xx)
+      implicit real*8(a-h,o-z)
+
+c     computes normalized voigt function for any x and any positive a
+
+      equivalence(z,zzz(1))
+      dimension c(31),zzz(2)
+      complex*16 z,zz,dcmplx,cdexp,cdcos
+      kilroy = 1
+      data q1,q2/9.42477796076938e0,0.564189583547756e0/
+      a = aa
+      x = xx
+      if(kilroy.eq.1) go to 106
+  100 if(a.eq.0.0e0) go to 105
+      a1 = 3.0d0*a
+      a2= a*a
+      if(a.lt.0.1e0) go to 101
+      fw = dmin1(q1*a,120.d0)
+      zz = dcmplx(-fw,q1*x)
+      z = cdexp(zz)
+      voigt = 0.0e0
+      go to 102
+  101 zz = dcmplx(q1*x,q1*a)
+      z = cdcos(zz)
+      fw=a2-x*x
+      fw = dmax1(fw,-120.e0)
+      voigt = q2*dexp(fw)*dcos(2.0e0*a*x)
+c 102 b1 = (1.0e0 - dble(z))*a*1.5e0
+c     b2 = -aimag(z)
+  102 b1=(1.0e0-zzz(1))*a*1.5e0
+      b2 = -zzz(2)
+      s = -8.0e0 - 1.5e0*x
+      t = s*s + 2.25e0*a2
+      do 104 n=1,31
+      t = t + s + 0.25e0
+      s = s + 0.5e0
+         b1= a1 - b1
+         b2 = -b2
+      if(t.gt.2.5d-12) go to 103
+      voigt = voigt - c(n)*a/3.0e0
+         go to 104
+  103    voigt= voigt + c(n)*(b1+b2*s)/t
+  104 continue
+      return
+c     calculation for a= 0
+  105 voigt = q2*dexp(-x*x)
+      return
+c     initialization of array c
+  106 kilroy = 0
+      do 107 n=1,31
+      t = -16 + n
+      c(n) = 0.0897935610625833e0*dexp(-(t/3.0e0)**2)
+  107 continue
+      go to 100
+      end
