@@ -57,6 +57,15 @@ c     Parametres modele
       Az(4)=7.20E+02 ! Mg
       Az(5)=1.15E+02 ! Al
       Az(6)=4.26E+01 ! Si
+c      Az(1)=1. ! O
+c      Az(2)=0. ! Ne
+c      Az(3)=0. ! Na
+c      Az(4)=0. ! Mg
+c      Az(5)=0. ! Al
+c      Az(6)=0. ! Si
+      do i=1,6
+         az(i)=az(i)/az(1)
+      enddo
       
       sb=2.*(pi**5.)*(ek**4.)/(15.*(h**3.)*(c0**2.))
       Htot=sb*(Teff**4.)/(4.*pi)
@@ -67,8 +76,9 @@ c     Parametres modele
       ! Lire les fichiers de VALD
       call initiateLineData()
 
-      call opac(1.d4, 1.d4)
-          
+      call opac(1.d5, 1.d4)
+      call etime(time,dummy)
+      write(*,*) 'temps de calcul:',time
       stop 'I CANCELLED IT'
 c
 c     Calcul de la structure grise
@@ -289,26 +299,20 @@ c
 c     Calcul des populations
       call eqetat(P,T)
 c
-c     Calcul de alphabf,alphaff,kappa,sigma,chi
-c      rT = T**(1./2.)
-c      sigma=xN(1)*alphadiff/rhod
-c      
-c      do j=1,nfreq
-c         xkappa(j)=xN(1)*xN(3)*C/((freq(j)**3.)*rT)
-c         do i=1,16
-c            nu0(i)=B/(i**2.)
-c            if (freq(j).ge.nu0(i)) then
-c               xkappa(j)=xkappa(j)+xNH1(i)*A/((i**5.)*(freq(j)**3.))
-c            endif
-c         enddo
-c         xkappa(j)=xkappa(j)*(1.-exp(-1.*h*freq(j)/(ek*T)))/rhod
-c         chi(j)=xkappa(j)+sigma
-c      enddo
-c
+      rT = T**(1./2.)
       sigma=xNe*alphadiff/rhod
+c
+c     Calcul alphaff
       do j=1,nfreq
          xkappa(j)=0.
-         chi(j)=sigma
+         do i=1,6
+            do k=2,3
+               xkappa(j)=xkappa(j)+
+     .              C*xNe*xNz(i,k)/((freq(j)**3.)*rT)*(float(k-1))**2.
+            enddo
+         enddo
+         xkappa(j)=xkappa(j)*(1.-exp(-1.*h*freq(j)/(ek*T)))/rhod
+         chi(j)=sigma+xkappa(j)
       enddo
 c
 c     Calcul alphabb
@@ -366,7 +370,8 @@ c              Population du niveau inferieur
 
 c              Opacite au centre de la raie (voir eq. 5.56 des notes de Bergeron)
                uu=0.
-               prof0=voigt(aa,uu)/dsqrt(pi)/dop          ! Profil de Voigt
+c               prof0=voigt(aa,uu)/dsqrt(pi)/dop          ! Profil de Voigt
+               prof0=1./4./gam                                   ! de Lorentz
                alpha0=0.02654*10.**(loggf(i,k,n))*prof0  ! Coeff. d'absorption
                opac0=alpha0*popul                        ! Opacite
                opac0=opac0*(1.-dexp(-h*fr0/ek/t))/rhod
@@ -380,9 +385,10 @@ c              Boucle sur les frequences
                   dwl=wl-wl0
 
 c                 Opacite a +/- 100 Angstroms du centre de la raie
-                  if(abs(dwl).lt.100.)then
+                  if(abs(dwl).lt.500.)then
                      uu=dfr/dop
-                     prof=voigt(aa,uu)/dsqrt(pi)/dop           ! Profil de Voigt
+c                     prof=voigt(aa,uu)/dsqrt(pi)/dop           ! Profil de Voigt
+                     prof=gam/(dfr**2.+(gam/4./pi)**2.)/4./pi**2.      ! de Lorentz
                      alphabb=0.02654*10.**(loggf(i,k,n))*prof  ! Coeff. d'absorption
                      opacbb=alphabb*popul                      ! Opacite
                      opacbb=opacbb*(1.-dexp(-h*fr/ek/t))/rhod
@@ -395,32 +401,33 @@ c                 Opacite a +/- 100 Angstroms du centre de la raie
          enddo
       enddo
 
-c      call sm_device_('postlandfile opacbb.ps')
-c      call sm_graphics_
-c      call sm_erase_
-c      call sm_lweight_(2.)
-c      call sm_expand_(1.0001)
-c      call sm_location_(5000,30000,5000,30000)
-c      call sm_limits_(3500.,7000.,-3.,9.)
-c      call sm_expand_(0.9)
-c      call sm_box_(1,2,0,0)
-c      call sm_expand_(1.3)
-c      call sm_xlabel_('\gl (\gV)')
-c      call sm_ylabel_('log \gc\d\gn/\gr')
-c      do j=1,nfreq
-c         xxx(j)=c0*1.d8/freq(j)
-c         yyy(j)=log10(chi(j))
-c      enddo
-c      call sm_conn_(xxx,yyy,nfreq)
-c      call sm_expand_(1.1)
-c      call sm_relocate_(3700.,7.7)
-c      call sm_putlabel_(6,'T = 10000 K')
-c      call sm_relocate_(4650.,7.7)
-c      call sm_putlabel_(6,'P = 10000 dynes/cm\u2')
-c      call sm_relocate_(3700.,6.7)
-c      call sm_putlabel_(6,'Bound-bound transitions'//
-c     .     ' + electron scattering')
-c      call sm_hardcopy_
+      call sm_device_('postlandfile opacbb_Lorentz.ps')
+      call sm_graphics_
+      call sm_erase_
+      call sm_lweight_(2.)
+      call sm_expand_(1.0001)
+      call sm_location_(5000,30000,5000,30000)
+      call sm_limits_(3500.,7000.,-2.,8.)
+      call sm_expand_(0.9)
+      call sm_box_(1,2,0,0)
+      call sm_expand_(1.3)
+      call sm_xlabel_('\gl (\gV)')
+      call sm_ylabel_('log \gc\d\gn/\gr')
+      do j=1,nfreq
+         xxx(j)=c0*1.d8/freq(j)
+         yyy(j)=log10(chi(j))
+      enddo
+      call sm_conn_(xxx,yyy,nfreq)
+      call sm_conn_(xxx,yyy,nshgd)
+      call sm_expand_(1.1)
+      call sm_relocate_(3700.,6.7)
+      call sm_putlabel_(6,'T = 10000 K')
+      call sm_relocate_(4650.,6.7)
+      call sm_putlabel_(6,'P = 100000 dynes/cm\u2')
+      call sm_relocate_(3700.,5.7)
+      call sm_putlabel_(6,'Bound-bound transitions'//
+     .     ' + electron scattering')
+      call sm_hardcopy_
 
       return
 c         
