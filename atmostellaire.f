@@ -39,12 +39,12 @@ c     Parametres modele
       tauND=1.e2
       ND=50
       ! Abondances du modèle de Vennes
-      Az(1)=1.20E+04 ! O
-      Az(2)=8.06E+03 ! Ne
-      Az(3)=4.53E+02 ! Na
-      Az(4)=7.20E+02 ! Mg
-      Az(5)=1.15E+02 ! Al
-      Az(6)=4.26E+01 ! Si
+      Az(1)=1.20E+04/1.20E+04 ! O
+      Az(2)=8.06E+03/1.20E+04 ! Ne
+      Az(3)=4.53E+02/1.20E+04 ! Na
+      Az(4)=7.20E+02/1.20E+04 ! Mg
+      Az(5)=1.15E+02/1.20E+04 ! Al
+      Az(6)=4.26E+01/1.20E+04 ! Si
       
       sb=2.*(pi**5.)*(ek**4.)/(15.*(h**3.)*(c0**2.))
       Htot=sb*(Teff**4.)/(4.*pi)
@@ -57,7 +57,7 @@ c     Parametres modele
       
       call eqetat(1d4, 1d4)
       
-      stop 'I CANCELLED IT'
+      !stop 'I CANCELLED IT'
 c
 c     Calcul de la structure grise
       call modelegris(tau1,tauND,Teff,xlogg,ND)
@@ -67,7 +67,7 @@ c     Garder en memoire la structure grise
          Pgris(id)=P(id)
       enddo
       write(*,*) 'structure grise done'
-      stop
+      !stop
 c
 c     Calcul ETR pour modele gris
       call spectre(ND,xlogg)
@@ -120,8 +120,8 @@ c
  502  continue
 c
 c
-      call etime(time,dummy)
-      write(*,*) 'temps de calcul:',time
+      !call etime(time,dummy)
+      !write(*,*) 'temps de calcul:',time
 c
       end   !end program atmostellaire
 c   
@@ -210,6 +210,8 @@ c
          dFdNe = 1.+sum1-(xNtot-xNe)*sum2
          
          xNe = xNe-F/dFdNe       ! on corrige Ne
+
+         !print *,j
          
          if (abs(F/(dFdNe*xNe)).lt.tol) goto 201 ! si F<tolerance,sort boucle
          if (j.eq.100) stop 'non convergence eqetat'
