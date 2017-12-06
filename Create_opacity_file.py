@@ -235,37 +235,39 @@ def write_Topbase_data(one_element_data_list):
 def work_on_one_file(filename):
 	print "Working on : " + str(filename)
 	original_data_list = open_Topbase_data(filename)
+	#freq_weight_file = openFortranData("newgrid_2.txt", [len(" 6.97191860E+16"), len(" 3.21390692E+15"), len("      43.00")])
+	#freq_weight_file = openFortranData("atmo_6771_cooldau", [len(" 6.97191860E+16"), len(" 3.21390692E+15"), len("      43.00")])
 	freq_weight_file = openFortranData("newgrid.txt", [len("    0.5995849160E+17"), len("    0.5878283490E+15"), len("    0.5000000000E+02")])
 	freq_data_list = createFreq_list(original_data_list, freq_weight_file)
 	return freq_data_list
 
-if os.path.exists('xsection_data/'):
-	pass
-else:
-	os.mkdir('xsection_data/')
+if __name__ == '__main__':
+	if os.path.exists('xsection_data/'):
+		pass
+	else:
+		os.mkdir('xsection_data/')
 
+	list_fichier = glob.glob('TB_data/Topbase_*')
+	os.system('rm -r ./xsection_data/*')
+	work_pool = mp.Pool(processes = 8)
+	result_list = []
 
-list_fichier = glob.glob('TB_data/Topbase_*')
-os.system('rm -r ./xsection_data/*')
-work_pool = mp.Pool(processes = 8)
-result_list = []
+	result_list = work_pool.map_async(work_on_one_file, list_fichier)
 
-result_list = work_pool.map_async(work_on_one_file, list_fichier)
-
-"""
-for filename in list_fichier:
-	print "Working on : " + str(filename)
-	original_data_list = open_Topbase_data(filename)
-	freq_weight_file = openFortranData("newgrid.txt", [len("    0.5995849160E+17"), len("    0.5878283490E+15"), len("    0.5000000000E+02")])
-	freq_data_list = createFreq_list(original_data_list, freq_weight_file)
-	write_Topbase_data(freq_data_list)
 	"""
+	for filename in list_fichier:
+		print "Working on : " + str(filename)
+		original_data_list = open_Topbase_data(filename)
+		freq_weight_file = openFortranData("newgrid.txt", [len("    0.5995849160E+17"), len("    0.5878283490E+15"), len("    0.5000000000E+02")])
+		freq_data_list = createFreq_list(original_data_list, freq_weight_file)
+		write_Topbase_data(freq_data_list)
+		"""
 
 
-for freq_data_list in result_list.get():
-	write_Topbase_data(freq_data_list)
+	for freq_data_list in result_list.get():
+		write_Topbase_data(freq_data_list)
 
 
 
-work_pool.close()
-work_pool.join()
+	work_pool.close()
+	work_pool.join()
