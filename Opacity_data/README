@@ -1,0 +1,11 @@
+Le fichier xsection_data.7z contient les fichiers topbase pour la grille de 1000 points.
+Vous pouvez l'extraire pour remplacer le répertoire xsection_data.
+
+Sinon, utiliser le script:
+
+
+How to execute the script: 
+
+Execute with, python2, Create_opacity_file.py
+Have a file named "atmos_6771_cooldau" with frequency as first column
+Needs data from Topbase to be in TB_data
